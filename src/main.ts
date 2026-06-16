@@ -2,6 +2,13 @@ import { Game } from './engine/Game';
 import { InputManager } from './engine/InputManager';
 import { Player } from './entities/Player';
 import { StageManager } from './stages/StageManager';
+import { SpawnSystem } from './systems/SpawnSystem';
+import idleUrl from '/assets/maki_idle.png';
+import walkUrl from '/assets/maki_spritesheet.png';
+import attackUrl from '/assets/maki_attack.png';
+import jumpUrl from '/assets/maki_jump.png';
+import hurtUrl from '/assets/maki_hurt.png';
+import gruntUrl from '/assets/grunt_spritesheet.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -10,52 +17,62 @@ const input = new InputManager();
 const stage = new StageManager();
 
 const player = new Player(100, 300, 'Maki');
+const spawner = new SpawnSystem(() => player);
 
 const idleImg = new Image();
-idleImg.src = '/assets/maki_idle.png';
+idleImg.src = idleUrl;
 idleImg.onload = () => {
   player.idleImage = idleImg;
 };
 
 const walkSheet = new Image();
-walkSheet.src = '/assets/maki_spritesheet.png';
+walkSheet.src = walkUrl;
 walkSheet.onload = () => {
   player.spriteImage = walkSheet;
 };
 
 const attackSheet = new Image();
-attackSheet.src = '/assets/maki_attack.png';
+attackSheet.src = attackUrl;
 attackSheet.onload = () => {
   player.attackImage = attackSheet;
 };
 
 const jumpImg = new Image();
-jumpImg.src = '/assets/maki_jump.png';
+jumpImg.src = jumpUrl;
 jumpImg.onload = () => {
   player.jumpImage = jumpImg;
 };
 
 const hurtImg = new Image();
-hurtImg.src = '/assets/maki_hurt.png';
+hurtImg.src = hurtUrl;
 hurtImg.onload = () => {
   player.hurtImage = hurtImg;
+};
+
+const gruntSheet = new Image();
+gruntSheet.src = gruntUrl;
+gruntSheet.onload = () => {
+  spawner.spriteImage = gruntSheet;
 };
 
 game.setBackground(stage);
 
 game.addEntity(player);
+game.addEntity(spawner);
 
 function updateInputs(): void {
   player.setInput(input.getState('player1'));
   stage.setPosition(player.x);
-  hud.textContent = `HP: ${player.health}`;
+  const enemies = spawner.getEnemies();
+  const enemyHP = enemies.length > 0 ? ` Enemy:${enemies[0].health}` : '';
+  hud.textContent = `HP: ${player.health}${enemyHP}`;
   requestAnimationFrame(updateInputs);
 }
 updateInputs();
 
 game.start();
 
-// Debug: Hキーで被弾
+// Debug
 document.addEventListener('keydown', (e) => {
   if (e.key === 'h') player.hurt();
 });

@@ -8,7 +8,7 @@ export class Player extends Entity {
   public velocityY: number = 0;
   private onGround: boolean = true;
   private facing: number = 1;
-  private state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' = 'idle';
+  state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' = 'idle';
   private stateTimer: number = 0;
   private readonly GRAVITY = 1200;
   private readonly MOVE_SPEED = 220;
@@ -21,7 +21,7 @@ export class Player extends Entity {
   public hurtImage: HTMLImageElement | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
-  private currentFrame: number = 0;
+  currentFrame: number = 0;
   private animTimer: number = 0;
   private readonly WALK_FRAME_COUNT = 4;
   private readonly ANIM_SPEED = 0.15;
@@ -64,7 +64,7 @@ export class Player extends Entity {
   }
   
   private handleInput(): void {
-    if (this.state === 'hurt') return;
+    if (this.state === 'hurt' || this.state === 'attack') return;
     
     // Horizontal movement
     if (this.inputState.left) {
@@ -77,7 +77,7 @@ export class Player extends Entity {
       if (this.onGround) this.state = 'walk';
     } else {
       this.velocityX = 0;
-      if (this.onGround && this.state !== 'attack') this.state = 'idle';
+      if (this.onGround) this.state = 'idle';
     }
     
     // Jump
@@ -117,7 +117,7 @@ export class Player extends Entity {
   
   public hurt(): void {
     this.state = 'hurt';
-    this.stateTimer = 0.1;
+    this.stateTimer = 0.15;
   }
   
   private applyPhysics(dt: number): void {

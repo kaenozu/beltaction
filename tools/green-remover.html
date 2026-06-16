@@ -43,6 +43,7 @@ h1 { font-size: 20px; margin-bottom: 16px; color: #4dabf7; }
   <input type="file" id="fileInput" accept="image/*" multiple>
   <label>Threshold <input type="range" id="toleranceSlider" min="0" max="100" value="30"></label>
   <button class="export-all" id="exportAllBtn">⬇ Export all</button>
+  <button id="clearBtn" style="background:#555;font-weight:normal">✕ Clear</button>
 </div>
 
 <div class="info">Drop or select multiple PNG files. Each file's green background will be automatically removed.</div>
@@ -54,6 +55,7 @@ const fileInput = document.getElementById('fileInput');
 const fileList = document.getElementById('fileList');
 const toleranceSlider = document.getElementById('toleranceSlider');
 const exportAllBtn = document.getElementById('exportAllBtn');
+const clearBtn = document.getElementById('clearBtn');
 
 const entries = []; // { file, name, dataUrl }
 
@@ -169,7 +171,10 @@ function imgToDataUrl(img) {
   return c.toDataURL('image/png');
 }
 
-// --- Export all (sequential downloads) ---
+clearBtn.addEventListener('click', () => {
+  entries.length = 0;
+  fileList.innerHTML = '<div class="empty">No files loaded</div>';
+});
 exportAllBtn.addEventListener('click', async () => {
   if (entries.length === 0) return;
 

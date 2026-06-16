@@ -40,10 +40,12 @@ h1 { font-size: 20px; margin-bottom: 16px; color: #ff6b6b; }
   <input type="file" id="fileInput" accept="image/*">
   <label>Zoom <input type="range" id="zoomSlider" min="0.5" max="6" step="0.25" value="3"></label>
   <label>Threshold <input type="range" id="toleranceSlider" min="0" max="100" value="20"></label>
+  <label>Frames <input type="number" id="frameCountInput" min="1" max="16" value="4" style="width:40px;text-align:center"></label>
   <button class="btn" id="pickBgBtn">🎯 Flood fill</button>
   <button class="btn" id="clearBgBtn">✕ Clear</button>
   <button class="btn" id="showMaskBtn">👁 Mask</button>
   <button class="btn" id="autoDetectBtn">◎ Auto detect</button>
+  <button class="btn" id="cropBtn">✂ Crop</button>
   <button class="btn btn-primary" id="exportSheetBtn">⬇ Export sheet</button>
   <button class="btn" id="exportFramesBtn">⬇ Export frames</button>
 </div>
@@ -76,6 +78,7 @@ const pickBgBtn = document.getElementById('pickBgBtn');
 const clearBgBtn = document.getElementById('clearBgBtn');
 const showMaskBtn = document.getElementById('showMaskBtn');
 const autoDetectBtn = document.getElementById('autoDetectBtn');
+const cropBtn = document.getElementById('cropBtn');
 const exportSheetBtn = document.getElementById('exportSheetBtn');
 const exportFramesBtn = document.getElementById('exportFramesBtn');
 const previewGrid = document.getElementById('previewGrid');
@@ -83,6 +86,7 @@ const previewTitle = document.getElementById('previewTitle');
 const exportCanvas = document.getElementById('exportCanvas');
 const exportInfo = document.getElementById('exportInfo');
 const title = document.getElementById('title');
+const frameCountInput = document.getElementById('frameCountInput');
 
 let sourceImage = null;
 let dividers = [0.25, 0.5, 0.75]; // divider positions (0-1)
@@ -93,6 +97,7 @@ let bgMask = null;
 let showMask = false;
 let pickingColor = false;
 let isDragging = false;
+let cropEnabled = false;
 
 function numFrames() { return dividers.length + 1; }
 
@@ -103,12 +108,23 @@ fileInput.addEventListener('change', (e) => {
   const img = new Image();
   img.onload = () => {
     sourceImage = img;
-    dividers = [0.25, 0.5, 0.75];
+    setFrameCount(parseInt(frameCountInput.value) || 4);
     bgMask = null;
     render();
   };
   img.src = URL.createObjectURL(file);
 });
+
+frameCountInput.addEventListener('change', () => {
+  if (!sourceImage) return;
+  setFrameCount(parseInt(frameCountInput.value) || 4);
+  render();
+});
+
+function setFrameCount(n) {
+  dividers = [];
+  for (let i = 1; i < n; i++) dividers.push(i / n);
+}
 
 zoomSlider.addEventListener('input', () => { zoom = parseFloat(zoomSlider.value); render(); });
 toleranceSlider.addEventListener('input', () => { tolerance = parseInt(toleranceSlider.value); });
@@ -121,6 +137,8 @@ pickBgBtn.addEventListener('click', () => {
 
 clearBgBtn.addEventListener('click', () => { bgMask = null; render(); });
 showMaskBtn.addEventListener('click', () => { showMask = !showMask; showMaskBtn.classList.toggle('active', showMask); render(); });
+
+cropBtn.addEventListener('click', () => { cropEnabled = !cropEnabled; cropBtn.classList.toggle('active', cropEnabled); render(); });
 
 // --- Auto detect ---
 autoDetectBtn.addEventListener('click', () => {
@@ -172,7 +190,7 @@ autoDetectBtn.addEventListener('click', () => {
   for (let i = 0; i < top.length - 1; i++) {
     newDividers.push(Math.round((top[i].end + top[i+1].start)/2) / w);
   }
-  if (newDividers.length > 0) dividers = newDividers;
+  if (newDividers.length > 0) { dividers = newDividers; frameCountInput.value = numFrames(); }
   render();
 });
 
@@ -292,17 +310,56 @@ window.addEventListener('mousemove', (e) => {
   }
 
   dividers[draggingDivider]=newPos;
+  frameCountInput.value = numFrames();
   render();
 });
 window.addEventListener('mouseup', () => { isDragging=false; draggingDivider=-1; });
 
 // --- Frame bounds ---
+function getCleanData() {
+  if (!sourceImage) return null;
+  const c = document.createElement('canvas');
+  c.width = sourceImage.width; c.height = sourceImage.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(sourceImage, 0, 0);
+  return applyMask(ctx.getImageData(0, 0, c.width, c.height));
+}
+
 function getFrameBounds(idx) {
   if (!sourceImage) return null;
-  const w=sourceImage.width;
-  const prev=idx===0?0:Math.round(dividers[idx-1]*w);
-  const next=idx===numFrames()-1?w:Math.round(dividers[idx]*w);
-  return {x: prev, width: Math.max(1, next-prev)};
+  const w = sourceImage.width, h = sourceImage.height;
+  const prev = idx === 0 ? 0 : Math.round(dividers[idx - 1] * w);
+  const next = idx === numFrames() - 1 ? w : Math.round(dividers[idx] * w);
+  const bounds = { x: prev, y: 0, width: Math.max(1, next - prev), height: h };
+
+  if (cropEnabled) {
+    const data = getCleanData();
+    if (!data) return bounds;
+    const d = data.data;
+    const fw = bounds.width, fh = bounds.height;
+    let minY = fh, maxY = 0;
+    for (let y = 0; y < fh; y++) {
+      for (let x = 0; x < fw; x++) {
+        const pi = ((bounds.y + y) * w + (bounds.x + x)) * 4;
+        if (d[pi + 3] > 0) { minY = Math.min(minY, y); maxY = Math.max(maxY, y); break; }
+      }
+    }
+    // Also scan columns for horizontal crop
+    let minX = fw, maxX = 0;
+    for (let x = 0; x < fw; x++) {
+      for (let y = 0; y < fh; y++) {
+        const pi = ((bounds.y + y) * w + (bounds.x + x)) * 4;
+        if (d[pi + 3] > 0) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); break; }
+      }
+    }
+    if (maxY >= minY) {
+      bounds.x += minX;
+      bounds.y += minY;
+      bounds.width = Math.max(1, maxX - minX + 1);
+      bounds.height = Math.max(1, maxY - minY + 1);
+    }
+  }
+  return bounds;
 }
 
 // --- Render ---
@@ -355,6 +412,11 @@ function render() {
     const b=getFrameBounds(i);
     if (!b) continue;
     c.fillText(`#${i+1}`,b.x+b.width/2-8/zoom,14/zoom);
+    if (cropEnabled) {
+      c.strokeStyle='#4dabf7'; c.lineWidth=1/zoom; c.setLineDash([3/zoom,3/zoom]);
+      c.strokeRect(b.x,b.y,b.width,b.height);
+      c.setLineDash([]);
+    }
   }
 
   updatePreviews();
@@ -374,11 +436,11 @@ function updatePreviews() {
   for (let i=0; i<numFrames(); i++) {
     const b=getFrameBounds(i); if (!b) continue;
     const cv=document.createElement('canvas');
-    cv.width=b.width; cv.height=sourceImage.height;
+    cv.width=b.width; cv.height=b.height;
     const cctx=cv.getContext('2d');
-    const fd=cctx.createImageData(b.width,sourceImage.height);
-    for (let y=0; y<sourceImage.height; y++) for (let x=0; x<b.width; x++) {
-      const si=(y*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
+    const fd=cctx.createImageData(b.width,b.height);
+    for (let y=0; y<b.height; y++) for (let x=0; x<b.width; x++) {
+      const si=((b.y+y)*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
       fd.data[di]=cleanData.data[si]; fd.data[di+1]=cleanData.data[si+1];
       fd.data[di+2]=cleanData.data[si+2]; fd.data[di+3]=cleanData.data[si+3];
     }
@@ -390,37 +452,34 @@ function updatePreviews() {
 // --- Export sheet ---
 function updateExport() {
   if (!sourceImage) return;
-  let maxW=0; const bounds=[];
+  const data = getCleanData(); if (!data) return;
+  const bounds = [];
   for (let i=0; i<numFrames(); i++) {
     const b=getFrameBounds(i); if (!b) continue;
-    bounds.push(b); if (b.width>maxW) maxW=b.width;
+    bounds.push(b);
   }
-  const FH=sourceImage.height;
-  exportCanvas.width=maxW*numFrames(); exportCanvas.height=FH;
-  const ectx=exportCanvas.getContext('2d');
-  const tempC=document.createElement('canvas');
-  tempC.width=sourceImage.width; tempC.height=sourceImage.height;
-  const tempCtx=tempC.getContext('2d');
-  tempCtx.drawImage(sourceImage,0,0);
-  const cleanData=applyMask(tempCtx.getImageData(0,0,tempC.width,tempC.height));
+  const FW = bounds.reduce((m, b) => Math.max(m, b.width), 0);
+  const FH = bounds.reduce((m, b) => Math.max(m, b.height), 0);
+  exportCanvas.width = FW * numFrames(); exportCanvas.height = FH;
+  const ectx = exportCanvas.getContext('2d');
 
   for (let i=0; i<bounds.length; i++) {
-    const b=bounds[i];
-    const srcC=document.createElement('canvas');
-    srcC.width=b.width; srcC.height=FH;
-    const sctx=srcC.getContext('2d');
-    const fd=sctx.createImageData(b.width,FH);
-    for (let y=0; y<FH; y++) for (let x=0; x<b.width; x++) {
-      const si=(y*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
-      fd.data[di]=cleanData.data[si]; fd.data[di+1]=cleanData.data[si+1];
-      fd.data[di+2]=cleanData.data[si+2]; fd.data[di+3]=cleanData.data[si+3];
+    const b = bounds[i];
+    const srcC = document.createElement('canvas');
+    srcC.width = b.width; srcC.height = b.height;
+    const sctx = srcC.getContext('2d');
+    const fd = sctx.createImageData(b.width, b.height);
+    for (let y=0; y<b.height; y++) for (let x=0; x<b.width; x++) {
+      const si = ((b.y+y)*sourceImage.width+(b.x+x))*4, di = (y*b.width+x)*4;
+      fd.data[di] = data.data[si]; fd.data[di+1] = data.data[si+1];
+      fd.data[di+2] = data.data[si+2]; fd.data[di+3] = data.data[si+3];
     }
     sctx.putImageData(fd,0,0);
-    ectx.imageSmoothingEnabled=false;
-    ectx.drawImage(srcC,0,0,b.width,FH,i*maxW,0,maxW,FH);
+    ectx.imageSmoothingEnabled = false;
+    ectx.drawImage(srcC, 0, 0, b.width, b.height, i*FW, 0, FW, FH);
   }
-  exportInfo.textContent=`Export: ${exportCanvas.width}x${FH} (${numFrames()} frames x ${maxW}x${FH})`;
-  exportCanvas.style.display='block';
+  exportInfo.textContent = `Export: ${exportCanvas.width}x${FH} (${numFrames()} frames x ${FW}x${FH})`;
+  exportCanvas.style.display = 'block';
 }
 
 exportSheetBtn.addEventListener('click',()=>{
@@ -433,22 +492,18 @@ exportSheetBtn.addEventListener('click',()=>{
 // --- Export individual frames ---
 exportFramesBtn.addEventListener('click',()=>{
   if (!sourceImage) return;
-  const tempC=document.createElement('canvas');
-  tempC.width=sourceImage.width; tempC.height=sourceImage.height;
-  const tempCtx=tempC.getContext('2d');
-  tempCtx.drawImage(sourceImage,0,0);
-  const cleanData=applyMask(tempCtx.getImageData(0,0,tempC.width,tempC.height));
+  const data = getCleanData(); if (!data) return;
 
   for (let i=0; i<numFrames(); i++) {
     const b=getFrameBounds(i); if (!b) continue;
     const frameC=document.createElement('canvas');
-    frameC.width=b.width; frameC.height=sourceImage.height;
+    frameC.width=b.width; frameC.height=b.height;
     const fctx=frameC.getContext('2d');
-    const fd=fctx.createImageData(b.width,sourceImage.height);
-    for (let y=0; y<sourceImage.height; y++) for (let x=0; x<b.width; x++) {
-      const si=(y*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
-      fd.data[di]=cleanData.data[si]; fd.data[di+1]=cleanData.data[si+1];
-      fd.data[di+2]=cleanData.data[si+2]; fd.data[di+3]=cleanData.data[si+3];
+    const fd=fctx.createImageData(b.width,b.height);
+    for (let y=0; y<b.height; y++) for (let x=0; x<b.width; x++) {
+      const si=((b.y+y)*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
+      fd.data[di]=data.data[si]; fd.data[di+1]=data.data[si+1];
+      fd.data[di+2]=data.data[si+2]; fd.data[di+3]=data.data[si+3];
     }
     fctx.putImageData(fd,0,0);
     const link=document.createElement('a');

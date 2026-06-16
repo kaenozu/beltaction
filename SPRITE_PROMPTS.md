@@ -185,7 +185,7 @@ Technical requirements:
 - No text, labels, borders, or UI.
 
 Pose:
-- Knocked back / recoil pose. Body leaning backward, arms flung back or up, one leg slightly lifted or staggered. Face showing shock/pain. This is the single-frame hit reaction.
+- Hit reaction / flinch pose. Only the upper body and face react — head snaps back slightly, arms flinch upward. The lower body (legs, hips, feet) must stay planted exactly as in the idle frame. No stepping back, no knee bending, no body leaning backward. Just the upper torso and head recoiling from the impact, like the Final Fight Maki hit animation.
 ```
 
 ---
@@ -249,41 +249,137 @@ Row 3:
 
 ---
 
-## Enemy: Basic Thug Sprite Sheet Prompt
+## Enemy: Grunt Idle Frame Prompt
 
-Use this after the Maki sprite style is locked.
+No concept art required. Use the detailed description below.
 
 ```text
-Create a pixel-art sprite sheet for a basic street thug enemy in the same style as the Maki sprite sheet.
+Create a pixel-art 4-frame horizontal strip for a Grunt enemy. Only the first frame (leftmost) contains the idle/standing pose. Frames 2-4 are blank (solid green background). Match the attached Maki idle frame in style, proportions, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
 
 Technical requirements:
-- 4 columns x 2 rows sprite sheet (8 cells, first 5 used, last 3 blank).
-- Each frame: 160x192 pixels.
-- Total sheet size: 640x384 pixels.
-- Transparent background.
-- Side view, facing left.
-- Feet aligned to the bottom of each frame.
-- Same visual scale, line thickness, shading as Maki.
+- 4 frames in a single horizontal row. Only frame 1 contains the character. Frames 2-4 are solid green background.
+- Frame size: 800x960 pixels per frame (5x scale of 160x192).
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 2-4 must be 100% green with NO content.
+- Side view, facing LEFT (enemies face left, Maki faces right).
+- Feet aligned to the bottom of the frame. Character fills the full frame — feet at bottom, head near top, body spanning most of the width.
+- Same visual scale, line thickness, and shading style as Maki. The thug should be similar height to Maki, not smaller.
+- Clean pixel art at this 5x scale — each "pixel" should be a crisp 5x5 block, no sub-pixel details, no blur, no gradients, no anti-aliased mush.
 - No text, labels, borders, or UI.
 
-Frame layout (left to right, top to bottom):
+Visual design (detailed description):
+- Generic arcade beat-em-up thug, not a copy of any existing game character.
+- Similar height to Maki, slightly broader build.
+- Wears a sleeveless vest (green or gray), ripped jeans, and boots.
+- Bald or shaved head, mean expression, thick eyebrows.
+- Tattoos on arms or shoulders.
+- Readable silhouette at game resolution.
 
-Row 1:
-1. (idx 0) Idle — standing, fists up
-2. (idx 1) Walk 1 — left leg forward
-3. (idx 2) Walk 2 — right leg forward
-4. (idx 3) Attack 1 — wind-up punch
+Pose:
+- Standing idle pose — fists up in an aggressive fighting stance, ready to fight.
+```
 
-Row 2:
-5. (idx 4) Attack 2 — extended punch / recovery
-6. (blank) Leave empty with transparent background
-7. (blank) Leave empty with transparent background
-8. (blank) Leave empty with transparent background
+---
 
-Design direction:
-- Generic arcade thug, not a copy of any existing game sprite.
-- Slightly larger torso than Maki, but same frame size.
-- Readable silhouette at 160x192 pixels.
+## Enemy: Grunt Walk Strip Prompt
+
+```text
+Create a pixel-art 4-frame horizontal strip for a Grunt enemy. Only the first 2 frames contain the walk animation. Frames 3 and 4 are blank (solid green background). Match the attached idle frame in style, proportions, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block.
+
+CRITICAL: The character in every walk frame must be the EXACT SAME SIZE as the attached idle frame. Same head size, same body proportions, same line thickness, same height. Do not enlarge or shrink the character when changing pose.
+
+Technical requirements:
+- 4 frames in a single horizontal row. Frames 1-2 contain the character, frames 3-4 are solid green background.
+- Frame size: 800x960 pixels per frame (5x scale of 160x192). Character must fill the full frame — feet at bottom, head near top.
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 3-4 must be 100% green with NO content.
+- Side view, facing LEFT. Both walk frames must face LEFT consistently.
+- Feet aligned to the bottom of both frames, same baseline as idle frame.
+- Same visual scale, line thickness, and shading style as the attached idle frame.
+- Clean pixel art — each "pixel" should be a crisp 5x5 block, no blur, no gradients.
+- No text, labels, borders, or UI.
+
+Frame layout (left to right):
+1. Walk frame 1 — left leg extended forward, right arm forward (stride pose)
+2. Walk frame 2 — feet together, arms at sides (passing pose)
+3. Blank — solid green background, no character
+4. Blank — solid green background, no character
+
+Both frames form a looping walk cycle: stride → passing → stride → passing. Keep the character's center of mass stable — do not shift horizontally between frames.
+```
+
+---
+
+## Enemy: Grunt Attack Strip Prompt
+
+```text
+Create a pixel-art 4-frame horizontal strip for a Grunt enemy. Only the first 2 frames contain the attack animation. Frames 3 and 4 are blank (solid green background). Match the attached idle frame in style, proportions, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block.
+
+CRITICAL: The character in every attack frame must be the EXACT SAME SIZE as the attached idle frame. Same head size, same body proportions, same line thickness, same height.
+
+Technical requirements:
+- 4 frames in a single horizontal row. Frames 1-2 contain the character, frames 3-4 are solid green background.
+- Frame size: 800x960 pixels per frame (5x scale of 160x192). Character must fill the full frame — feet at bottom, head near top.
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 3-4 must be 100% green with NO content.
+- Side view, facing LEFT. Both attack frames must face LEFT consistently.
+- Feet aligned to the bottom of both frames, same baseline as idle frame.
+- Same visual scale, line thickness, and shading style as the attached idle frame.
+- Clean pixel art — each "pixel" should be a crisp 5x5 block, no blur, no gradients.
+- No text, labels, borders, or UI.
+
+Frame layout (left to right):
+1. Attack frame 1 (wind-up) — arm pulled back, body coiled
+2. Attack frame 2 (strike) — full extension punch, arm extended forward toward the right
+3. Blank — solid green background, no character
+4. Blank — solid green background, no character
+
+Both frames form a fast punch sequence. Keep feet planted in both frames (no stepping forward).
+```
+
+---
+
+## Enemy: Grunt Sprite Sheet Prompt
+
+No concept art required. Use the detailed description below.
+
+```text
+Create a pixel-art sprite sheet for a Grunt enemy in the same style as the Maki character (attached concept art reference if available, otherwise follow the detailed description).
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
+
+Technical requirements:
+- 5 frames arranged in a single horizontal row.
+- Frame size: 800x960 pixels per frame (5x scale of 160x192). Character must fill the full frame — feet at bottom, head near top, body spanning most of the width. Do not leave large empty space on left or right.
+- Total image size: 4000x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background.
+- Side view, facing LEFT (enemies face left, Maki faces right). All 5 frames must consistently face LEFT — do not flip direction between frames. Feet aligned to the bottom of every frame.
+- Same visual scale, line thickness, and shading style as Maki.
+- Clean pixel art at this 5x scale — each "pixel" should be a crisp 5x5 block, no sub-pixel details, no blur, no gradients, no anti-aliased mush.
+- No text, labels, borders, or UI.
+
+Visual design (detailed description):
+- Generic arcade beat-em-up thug, not a copy of any existing game character.
+- Slightly taller and broader than Maki, but within the 160x192 frame.
+- Wears a sleeveless vest (green or gray), ripped jeans, and boots.
+- Bald or shaved head, mean expression, thick eyebrows.
+- Tattoos on arms or shoulders.
+- Readable silhouette at game resolution.
+
+Frame layout (left to right, 5 frames):
+1. (idx 0) Idle — standing, fists up, aggressive stance
+2. (idx 1) Walk 1 — left leg extended forward, right arm forward, body slightly lowered
+3. (idx 2) Walk 2 — right leg extended forward, left arm forward, mirror of frame 1
+4. (idx 3) Attack 1 — wind-up, arm pulled back
+5. (idx 4) Attack 2 — full extension punch, arm extended forward
+
+Walk frames 1 and 2 must be clearly different leg positions that alternate to form a recognizable walk cycle. Both walk frames must face LEFT (do not flip to right). Feet must touch the bottom of the frame in all frames.
 ```
 
 ---
@@ -293,29 +389,27 @@ Design direction:
 ```text
 Create a pixel-art sprite sheet for a tougher mid-sized enemy in the same style as the Maki sprite sheet.
 
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
+
 Technical requirements:
-- 4 columns x 2 rows sprite sheet (8 cells, first 6 used, last 2 blank).
-- Each frame: 160x192 pixels.
-- Total sheet size: 640x384 pixels.
-- Transparent background.
-- Side view, facing left.
+- 8 frames arranged in a single horizontal row (not a grid).
+- Frame size: 800x960 pixels per frame (5x scale of 160x192). Character must fill the full frame height (feet at bottom edge, head near top edge).
+- Total image size: 6400x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background.
+- Side view, facing left, same perspective as the thug enemy.
 - Feet aligned to the bottom of each frame.
 - Same pixel-art style, palette logic, and shading as the Maki sprite.
 - No text, labels, borders, or UI.
 
-Frame layout (left to right, top to bottom):
-
-Row 1:
+Frame layout (left to right, 8 frames total):
 1. (idx 0) Idle — heavy stance, arms crossed or lowered
 2. (idx 1) Walk 1 — heavy step forward
 3. (idx 2) Walk 2 — heavy step forward
 4. (idx 3) Attack 1 — heavy wind-up
-
-Row 2:
 5. (idx 4) Attack 2 — extended heavy hit
 6. (idx 5) Attack 3 — recovery
-7. (blank) Leave empty with transparent background
-8. (blank) Leave empty with transparent background
+7. (blank) Leave empty with green background
+8. (blank) Leave empty with green background
 
 Design direction:
 - Heavier build than the basic thug.
@@ -330,29 +424,27 @@ Design direction:
 ```text
 Create a pixel-art sprite sheet for a boss enemy in the same style as the Maki sprite sheet.
 
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
+
 Technical requirements:
-- 4 columns x 2 rows sprite sheet (8 cells, first 7 used, last 1 blank).
-- Each frame: 160x192 pixels.
-- Total sheet size: 640x384 pixels.
-- Transparent background.
-- Side view, facing left.
+- 8 frames arranged in a single horizontal row (not a grid).
+- Frame size: 800x960 pixels per frame (5x scale of 160x192). Character must fill the full frame height (feet at bottom edge, head near top edge).
+- Total image size: 6400x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background.
+- Side view, facing left, same perspective as other enemies.
 - Feet aligned to the bottom of each frame.
 - Same pixel-art style, palette logic, and shading as the Maki sprite.
 - No text, labels, borders, or UI.
 
-Frame layout (left to right, top to bottom):
-
-Row 1:
+Frame layout (left to right, 8 frames total):
 1. (idx 0) Idle — imposing pose
 2. (idx 1) Walk 1 — slow heavy step
 3. (idx 2) Walk 2 — slow heavy step
 4. (idx 3) Attack 1 — wind-up
-
-Row 2:
 5. (idx 4) Attack 2 — strike
 6. (idx 5) Attack 3 — follow-through
 7. (idx 6) Attack 4 — recovery
-8. (blank) Leave empty with transparent background
+8. (blank) Leave empty with green background
 
 Design direction:
 - Larger presence, fills the frame.
