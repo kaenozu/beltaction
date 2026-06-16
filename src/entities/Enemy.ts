@@ -44,13 +44,30 @@ export class Enemy extends Entity {
     
     if (this.stateTimer > 0) {
       this.stateTimer -= dt;
-      if (this.stateTimer <= 0 && this.state === 'hurt') {
-        this.state = 'idle';
-        this.velocityX = 0;
+      if (this.stateTimer <= 0) {
+        if (this.state === 'hurt') {
+          this.state = 'idle';
+          this.velocityX = 0;
+        } else if (this.state === 'attack') {
+          this.state = 'idle';
+          this.velocityX = 0;
+        }
       }
     }
     
     if (this.state === 'hurt') {
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
+    
+    if (this.state === 'attack') {
+      // Check hit on strike frame
+      if (this.currentFrame === 1 && !this.attackHit) {
+        this.attackHit = true;
+        player.health -= this.damage;
+        player.hurt();
+      }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
       return;
@@ -61,15 +78,11 @@ export class Enemy extends Entity {
     if (dist < this.ATTACK_RANGE && this.attackCooldown <= 0) {
       this.state = 'attack';
       this.stateTimer = 0.4;
+      this.animTimer = 0;
+      this.currentFrame = 0;
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
-      this.behaviorTimer = 0;
       this.attackHit = false;
-    } else if (this.state === 'attack' && this.currentFrame === 1 && !this.attackHit) {
-      // Strike frame: deal damage to player
-      this.attackHit = true;
-      player.health -= this.damage;
-      player.hurt();
     } else if (this.behaviorTimer <= 0) {
       // Toggle behavior: walk → idle → walk
       if (this.state === 'walk') {

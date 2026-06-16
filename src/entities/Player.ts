@@ -116,6 +116,7 @@ export class Player extends Entity {
   }
   
   public hurt(): void {
+    if (this.state === 'hurt') return; // Invincible during hurt
     this.state = 'hurt';
     this.stateTimer = 0.15;
   }
