@@ -16,6 +16,7 @@ export class Enemy extends Entity {
   private stateTimer: number = 0;
   private attackCooldown: number = 0;
   private behaviorTimer: number = 0.5;
+  private attackHit: boolean = false;
   private readonly BEHAVIOR_WALK_DURATION = 1.5;
   private readonly BEHAVIOR_IDLE_DURATION = 0.8;
   private facing: number = -1;
@@ -63,6 +64,12 @@ export class Enemy extends Entity {
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
       this.behaviorTimer = 0;
+      this.attackHit = false;
+    } else if (this.state === 'attack' && this.currentFrame === 1 && !this.attackHit) {
+      // Strike frame: deal damage to player
+      this.attackHit = true;
+      player.health -= this.damage;
+      player.hurt();
     } else if (this.behaviorTimer <= 0) {
       // Toggle behavior: walk → idle → walk
       if (this.state === 'walk') {
@@ -136,7 +143,7 @@ export class Enemy extends Entity {
     let frameIdx = 0;
     if (this.state === 'idle') frameIdx = 0;
     else if (this.state === 'walk') frameIdx = 1 + this.currentFrame;
-    else if (this.state === 'attack') frameIdx = 0;
+    else if (this.state === 'attack') frameIdx = 3 + this.currentFrame;
     else if (this.state === 'hurt') frameIdx = 0;
     
     // Flash effect during hurt state
