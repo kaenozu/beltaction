@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maki Preview</title>
+  <style>
+    body { margin: 0; padding: 0; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    #gameCanvas { background: #111; image-rendering: pixelated; image-rendering: crisp-edges; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="640" height="480"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const img = new Image();
+    img.src = '/assets/maki-reference.png';
+    img.onload = () => {
+      const scale = 192 / 239;
+      const drawW = Math.round(152 * scale);
+      const drawH = 192;
+      const x = 100 + (160 - drawW) / 2;
+      ctx.drawImage(img, x, 480 - 192, drawW, drawH);
+    };
+  </script>
+</body>
+</html>

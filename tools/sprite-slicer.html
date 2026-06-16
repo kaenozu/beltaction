@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite Slicer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #eee; font-family: system-ui, sans-serif; padding: 20px; }
+h1 { font-size: 20px; margin-bottom: 16px; color: #ff6b6b; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.controls label { font-size: 13px; display: flex; align-items: center; gap: 4px; }
+.controls input[type="file"] { font-size: 13px; color: #eee; }
+.controls input[type="range"] { width: 80px; vertical-align: middle; }
+.controls .btn {
+  background: #333; color: #eee; border: 1px solid #555; padding: 4px 12px; border-radius: 4px;
+  font-size: 12px; cursor: pointer;
+}
+.controls .btn:hover { background: #444; }
+.controls .btn-primary { background: #ff6b6b; border-color: #ff6b6b; font-weight: bold; }
+.controls .btn-primary:hover { background: #ff5252; }
+.controls .btn.active { background: #4dabf7; border-color: #4dabf7; }
+.layout { display: flex; gap: 20px; flex-wrap: wrap; }
+.editor-panel { position: relative; }
+.editor-panel canvas { display: block; border: 2px solid #333; cursor: crosshair; image-rendering: pixelated; }
+.info { font-size: 12px; color: #888; margin-top: 6px; line-height: 1.6; }
+.info kbd { background: #333; padding: 1px 5px; border-radius: 2px; border: 1px solid #555; font-size: 11px; }
+.preview-panel h2 { font-size: 14px; margin-bottom: 8px; color: #aaa; }
+.preview-grid { display: flex; gap: 4px; flex-wrap: wrap; }
+.preview-grid canvas { border: 1px solid #444; image-rendering: pixelated; width: 160px; height: 192px; background: repeating-conic-gradient(#222 0% 25%, #333 0% 50%) 0 0 / 16px 16px; }
+.export-section { margin-top: 20px; display: flex; gap: 12px; align-items: center; }
+.export-section canvas { border: 1px solid #444; image-rendering: pixelated; background: repeating-conic-gradient(#222 0% 25%, #333 0% 50%) 0 0 / 16px 16px; display: none; }
+</style>
+</head>
+<body>
+
+<h1 id="title">Sprite Slicer</h1>
+
+<div class="controls">
+  <input type="file" id="fileInput" accept="image/*">
+  <label>Zoom <input type="range" id="zoomSlider" min="0.5" max="6" step="0.25" value="3"></label>
+  <label>Threshold <input type="range" id="toleranceSlider" min="0" max="100" value="20"></label>
+  <button class="btn" id="pickBgBtn">🎯 Flood fill</button>
+  <button class="btn" id="clearBgBtn">✕ Clear</button>
+  <button class="btn" id="showMaskBtn">👁 Mask</button>
+  <button class="btn" id="autoDetectBtn">◎ Auto detect</button>
+  <button class="btn btn-primary" id="exportSheetBtn">⬇ Export sheet</button>
+  <button class="btn" id="exportFramesBtn">⬇ Export frames</button>
+</div>
+
+<div class="layout">
+  <div class="editor-panel">
+    <canvas id="editorCanvas"></canvas>
+    <div class="info">
+      <kbd>Click background</kbd> Flood fill · <kbd>Shift+Click</kbd> Restore ·
+      Drag <span style="color:#ff6b6b;">▎</span> to split frames
+    </div>
+  </div>
+  <div class="preview-panel">
+    <h2 id="previewTitle">Preview</h2>
+    <div class="preview-grid" id="previewGrid"></div>
+  </div>
+</div>
+
+<div class="export-section">
+  <canvas id="exportCanvas"></canvas>
+  <div id="exportInfo" class="info"></div>
+</div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const editorCanvas = document.getElementById('editorCanvas');
+const zoomSlider = document.getElementById('zoomSlider');
+const toleranceSlider = document.getElementById('toleranceSlider');
+const pickBgBtn = document.getElementById('pickBgBtn');
+const clearBgBtn = document.getElementById('clearBgBtn');
+const showMaskBtn = document.getElementById('showMaskBtn');
+const autoDetectBtn = document.getElementById('autoDetectBtn');
+const exportSheetBtn = document.getElementById('exportSheetBtn');
+const exportFramesBtn = document.getElementById('exportFramesBtn');
+const previewGrid = document.getElementById('previewGrid');
+const previewTitle = document.getElementById('previewTitle');
+const exportCanvas = document.getElementById('exportCanvas');
+const exportInfo = document.getElementById('exportInfo');
+const title = document.getElementById('title');
+
+let sourceImage = null;
+let dividers = [0.25, 0.5, 0.75]; // divider positions (0-1)
+let zoom = 3;
+let draggingDivider = -1;
+let tolerance = 20;
+let bgMask = null;
+let showMask = false;
+let pickingColor = false;
+let isDragging = false;
+
+function numFrames() { return dividers.length + 1; }
+
+// --- Load ---
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    sourceImage = img;
+    dividers = [0.25, 0.5, 0.75];
+    bgMask = null;
+    render();
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+zoomSlider.addEventListener('input', () => { zoom = parseFloat(zoomSlider.value); render(); });
+toleranceSlider.addEventListener('input', () => { tolerance = parseInt(toleranceSlider.value); });
+
+pickBgBtn.addEventListener('click', () => {
+  pickingColor = !pickingColor;
+  pickBgBtn.classList.toggle('active', pickingColor);
+  editorCanvas.style.cursor = pickingColor ? 'crosshair' : 'crosshair';
+});
+
+clearBgBtn.addEventListener('click', () => { bgMask = null; render(); });
+showMaskBtn.addEventListener('click', () => { showMask = !showMask; showMaskBtn.classList.toggle('active', showMask); render(); });
+
+// --- Auto detect ---
+autoDetectBtn.addEventListener('click', () => {
+  if (!sourceImage) return;
+  const w = sourceImage.width, h = sourceImage.height;
+  const tempC = document.createElement('canvas');
+  tempC.width = w; tempC.height = h;
+  const tempCtx = tempC.getContext('2d');
+  tempCtx.drawImage(sourceImage, 0, 0);
+  const d = tempCtx.getImageData(0, 0, w, h).data;
+
+  const corners = [
+    [d[0], d[1], d[2]], [d[(w-1)*4], d[(w-1)*4+1], d[(w-1)*4+2]],
+    [d[(h-1)*w*4], d[(h-1)*w*4+1], d[(h-1)*w*4+2]], [d[(w*h-1)*4], d[(w*h-1)*4+1], d[(w*h-1)*4+2]],
+  ];
+  let bg = corners[0];
+  for (const c of corners) { if (c[1] > bg[1]) bg = c; }
+  const maxDist = (tolerance/100)*441;
+
+  const scores = [];
+  for (let x = 0; x < w; x++) {
+    let nonBg = 0;
+    for (let y = 0; y < h; y++) {
+      const pi = (y*w+x)*4;
+      const dr=d[pi]-bg[0], dg=d[pi+1]-bg[1], db=d[pi+2]-bg[2];
+      if (Math.sqrt(dr*dr+dg*dg+db*db) > maxDist) nonBg++;
+    }
+    scores.push(nonBg/h);
+  }
+
+  const MIN_RATIO = 0.08, MIN_GAP = 20;
+  const regions = [];
+  let inFrame = false, start = 0;
+  for (let x = 0; x < w; x++) {
+    if (!inFrame && scores[x] > MIN_RATIO) { inFrame = true; start = x; }
+    else if (inFrame && scores[x] <= MIN_RATIO) {
+      let gapEnd = x;
+      while (gapEnd < w && scores[gapEnd] <= MIN_RATIO) gapEnd++;
+      if (gapEnd - x >= MIN_GAP) { inFrame = false; regions.push({start, end: x}); }
+    }
+  }
+  if (inFrame) regions.push({start, end: w});
+
+  regions.sort((a,b) => (b.end-b.start)-(a.end-a.start));
+  const top = regions.slice(0, 6).sort((a,b) => a.start-b.start);
+  if (top.length < 2) return;
+
+  const newDividers = [];
+  for (let i = 0; i < top.length - 1; i++) {
+    newDividers.push(Math.round((top[i].end + top[i+1].start)/2) / w);
+  }
+  if (newDividers.length > 0) dividers = newDividers;
+  render();
+});
+
+// --- Flood fill ---
+function floodFill(imgData, startX, startY, targetColor, tol) {
+  const w=imgData.width, h=imgData.height, d=imgData.data;
+  const mask = new Uint8Array(w*h);
+  const maxDist = (tol/100)*441;
+  const stack = [[startX, startY]];
+  const visited = new Uint8Array(w*h);
+  while (stack.length) {
+    const [x,y]=stack.pop();
+    const idx=y*w+x;
+    if (visited[idx]) continue;
+    visited[idx]=1;
+    const pi=idx*4;
+    const dr=d[pi]-targetColor[0], dg=d[pi+1]-targetColor[1], db=d[pi+2]-targetColor[2];
+    if (Math.sqrt(dr*dr+dg*dg+db*db) <= maxDist) {
+      mask[idx]=1;
+      if (x>0) stack.push([x-1,y]); if (x<w-1) stack.push([x+1,y]);
+      if (y>0) stack.push([x,y-1]); if (y<h-1) stack.push([x,y+1]);
+    }
+  }
+  return mask;
+}
+
+function paintMask(imgData, startX, startY, radius, paintValue) {
+  if (!bgMask) bgMask = new Uint8Array(imgData.width*imgData.height);
+  const w=imgData.width, h=imgData.height;
+  for (let dy=-radius; dy<=radius; dy++) {
+    for (let dx=-radius; dx<=radius; dx++) {
+      if (dx*dx+dy*dy>radius*radius) continue;
+      const px=startX+dx, py=startY+dy;
+      if (px<0||px>=w||py<0||py>=h) continue;
+      bgMask[py*w+px]=paintValue;
+    }
+  }
+}
+
+function applyMask(imgData) {
+  if (!bgMask) return imgData;
+  const d=imgData.data;
+  for (let i=0; i<bgMask.length; i++) if (bgMask[i]) d[i*4+3]=0;
+  return imgData;
+}
+
+// --- Canvas interactions ---
+editorCanvas.addEventListener('mousedown', (e) => {
+  if (!sourceImage) return;
+  const rect=editorCanvas.getBoundingClientRect();
+  const mx=Math.floor((e.clientX-rect.left)/zoom);
+  const my=Math.floor((e.clientY-rect.top)/zoom);
+  if (mx<0||mx>=sourceImage.width||my<0||my>=sourceImage.height) return;
+
+  const imgW=sourceImage.width;
+  for (let i=0; i<dividers.length; i++) {
+    const dx=dividers[i]*imgW;
+    if (Math.abs(mx-dx)<8/zoom && !e.shiftKey) { draggingDivider=i; isDragging=true; return; }
+  }
+
+  if (e.shiftKey) {
+    const tempC=document.createElement('canvas');
+    tempC.width=sourceImage.width; tempC.height=sourceImage.height;
+    const tempCtx=tempC.getContext('2d');
+    tempCtx.drawImage(sourceImage,0,0);
+    const id=tempCtx.getImageData(0,0,tempC.width,tempC.height);
+    paintMask(id, mx, my, 4, 0);
+    return;
+  }
+
+  const tempC=document.createElement('canvas');
+  tempC.width=sourceImage.width; tempC.height=sourceImage.height;
+  const tempCtx=tempC.getContext('2d');
+  tempCtx.drawImage(sourceImage,0,0);
+  const id=tempCtx.getImageData(0,0,tempC.width,tempC.height);
+  const pixel=tempCtx.getImageData(mx,my,1,1).data;
+  const fillMask=floodFill(id,mx,my,[pixel[0],pixel[1],pixel[2]],tolerance);
+  if (!bgMask) bgMask=fillMask;
+  else for (let i=0; i<fillMask.length; i++) if (fillMask[i]) bgMask[i]=1;
+  render();
+});
+
+// --- Divider drag + snap ---
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging||!sourceImage) return;
+  const rect=editorCanvas.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)/zoom;
+  const imgW=sourceImage.width;
+  let newPos=Math.max(0,Math.min(1,mx/imgW));
+  const prev=dividers[draggingDivider-1]!==undefined?dividers[draggingDivider-1]+0.02:0;
+  const next=dividers[draggingDivider+1]!==undefined?dividers[draggingDivider+1]-0.02:1;
+  newPos=Math.max(prev,Math.min(next,newPos));
+
+  // Snap to bg column
+  const snapR=3, xPx=Math.round(newPos*imgW);
+  const corners=[
+    [0,0,0],[(imgW-1)*4,(imgW-1)*4+1,(imgW-1)*4+2],
+    [(sourceImage.height-1)*imgW*4,(sourceImage.height-1)*imgW*4+1,(sourceImage.height-1)*imgW*4+2],
+    [(sourceImage.width*sourceImage.height-1)*4,(sourceImage.width*sourceImage.height-1)*4+1,(sourceImage.width*sourceImage.height-1)*4+2],
+  ];
+  // simplified: just use tolerance
+  for (let sx=xPx-snapR; sx<=xPx+snapR; sx++) {
+    if (sx<1||sx>=imgW-1) continue;
+    // Check a few sample y positions
+    let bgCount=0;
+    const tempC=document.createElement('canvas');
+    tempC.width=imgW; tempC.height=sourceImage.height;
+    const tempCtx=tempC.getContext('2d');
+    tempCtx.drawImage(sourceImage,0,0);
+    const d=tempCtx.getImageData(0,0,imgW,sourceImage.height).data;
+    const maxDist=(tolerance/100)*441;
+    for (let y=0; y<sourceImage.height; y+=4) {
+      const pi=(y*imgW+sx)*4;
+      if (Math.sqrt(d[pi]*d[pi]+d[pi+1]*d[pi+1]+d[pi+2]*d[pi+2])<maxDist) bgCount++;
+    }
+    if (bgCount/(sourceImage.height/4)>0.7) { newPos=sx/imgW; break; }
+  }
+
+  dividers[draggingDivider]=newPos;
+  render();
+});
+window.addEventListener('mouseup', () => { isDragging=false; draggingDivider=-1; });
+
+// --- Frame bounds ---
+function getFrameBounds(idx) {
+  if (!sourceImage) return null;
+  const w=sourceImage.width;
+  const prev=idx===0?0:Math.round(dividers[idx-1]*w);
+  const next=idx===numFrames()-1?w:Math.round(dividers[idx]*w);
+  return {x: prev, width: Math.max(1, next-prev)};
+}
+
+// --- Render ---
+function render() {
+  if (!sourceImage) return;
+  const imgW=sourceImage.width, imgH=sourceImage.height;
+
+  title.textContent = `Sprite Slicer (${numFrames()} frames)`;
+  previewTitle.textContent = `Preview (${numFrames()} frames)`;
+  exportFramesBtn.textContent = `⬇ Export ${numFrames()} frames`;
+
+  editorCanvas.width=imgW*zoom; editorCanvas.height=imgH*zoom;
+  const c=editorCanvas.getContext('2d');
+  c.imageSmoothingEnabled=false; c.scale(zoom,zoom);
+
+  const cs=8;
+  for (let y=0; y<imgH; y+=cs) for (let x=0; x<imgW; x+=cs) {
+    c.fillStyle=(Math.floor(x/cs)+Math.floor(y/cs))%2===0?'#333':'#444';
+    c.fillRect(x,y,cs,cs);
+  }
+
+  const tempC=document.createElement('canvas');
+  tempC.width=imgW; tempC.height=imgH;
+  const tempCtx=tempC.getContext('2d');
+  tempCtx.drawImage(sourceImage,0,0);
+  const maskedData=applyMask(tempCtx.getImageData(0,0,imgW,imgH));
+  tempCtx.putImageData(maskedData,0,0);
+  c.drawImage(tempC,0,0);
+
+  if (showMask&&bgMask) {
+    for (let y=0; y<imgH; y++) for (let x=0; x<imgW; x++) {
+      if (bgMask[y*imgW+x]) { c.fillStyle='rgba(255,0,0,0.3)'; c.fillRect(x,y,1,1); }
+    }
+  }
+
+  c.strokeStyle='#ff6b6b'; c.lineWidth=2/zoom;
+  for (let i=0; i<dividers.length; i++) {
+    const dx=dividers[i]*imgW;
+    c.beginPath(); c.moveTo(dx,0); c.lineTo(dx,imgH); c.stroke();
+    c.fillStyle='#ff6b6b';
+    c.beginPath(); c.arc(dx,imgH/2,5/zoom,0,Math.PI*2); c.fill();
+    c.fillStyle='#fff';
+    c.font=`${10/zoom}px monospace`;
+    c.fillText(`${i+1}`,dx+3/zoom,imgH/2-6/zoom);
+  }
+
+  c.fillStyle='rgba(255,255,255,0.7)';
+  c.font=`bold ${11/zoom}px monospace`;
+  for (let i=0; i<numFrames(); i++) {
+    const b=getFrameBounds(i);
+    if (!b) continue;
+    c.fillText(`#${i+1}`,b.x+b.width/2-8/zoom,14/zoom);
+  }
+
+  updatePreviews();
+  updateExport();
+}
+
+// --- Previews ---
+function updatePreviews() {
+  if (!sourceImage) return;
+  previewGrid.innerHTML='';
+  const tempC=document.createElement('canvas');
+  tempC.width=sourceImage.width; tempC.height=sourceImage.height;
+  const tempCtx=tempC.getContext('2d');
+  tempCtx.drawImage(sourceImage,0,0);
+  const cleanData=applyMask(tempCtx.getImageData(0,0,tempC.width,tempC.height));
+
+  for (let i=0; i<numFrames(); i++) {
+    const b=getFrameBounds(i); if (!b) continue;
+    const cv=document.createElement('canvas');
+    cv.width=b.width; cv.height=sourceImage.height;
+    const cctx=cv.getContext('2d');
+    const fd=cctx.createImageData(b.width,sourceImage.height);
+    for (let y=0; y<sourceImage.height; y++) for (let x=0; x<b.width; x++) {
+      const si=(y*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
+      fd.data[di]=cleanData.data[si]; fd.data[di+1]=cleanData.data[si+1];
+      fd.data[di+2]=cleanData.data[si+2]; fd.data[di+3]=cleanData.data[si+3];
+    }
+    cctx.putImageData(fd,0,0);
+    previewGrid.appendChild(cv);
+  }
+}
+
+// --- Export sheet ---
+function updateExport() {
+  if (!sourceImage) return;
+  let maxW=0; const bounds=[];
+  for (let i=0; i<numFrames(); i++) {
+    const b=getFrameBounds(i); if (!b) continue;
+    bounds.push(b); if (b.width>maxW) maxW=b.width;
+  }
+  const FH=sourceImage.height;
+  exportCanvas.width=maxW*numFrames(); exportCanvas.height=FH;
+  const ectx=exportCanvas.getContext('2d');
+  const tempC=document.createElement('canvas');
+  tempC.width=sourceImage.width; tempC.height=sourceImage.height;
+  const tempCtx=tempC.getContext('2d');
+  tempCtx.drawImage(sourceImage,0,0);
+  const cleanData=applyMask(tempCtx.getImageData(0,0,tempC.width,tempC.height));
+
+  for (let i=0; i<bounds.length; i++) {
+    const b=bounds[i];
+    const srcC=document.createElement('canvas');
+    srcC.width=b.width; srcC.height=FH;
+    const sctx=srcC.getContext('2d');
+    const fd=sctx.createImageData(b.width,FH);
+    for (let y=0; y<FH; y++) for (let x=0; x<b.width; x++) {
+      const si=(y*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
+      fd.data[di]=cleanData.data[si]; fd.data[di+1]=cleanData.data[si+1];
+      fd.data[di+2]=cleanData.data[si+2]; fd.data[di+3]=cleanData.data[si+3];
+    }
+    sctx.putImageData(fd,0,0);
+    ectx.imageSmoothingEnabled=false;
+    ectx.drawImage(srcC,0,0,b.width,FH,i*maxW,0,maxW,FH);
+  }
+  exportInfo.textContent=`Export: ${exportCanvas.width}x${FH} (${numFrames()} frames x ${maxW}x${FH})`;
+  exportCanvas.style.display='block';
+}
+
+exportSheetBtn.addEventListener('click',()=>{
+  if (!sourceImage) return;
+  updateExport();
+  const link=document.createElement('a');
+  link.download='spritesheet.png'; link.href=exportCanvas.toDataURL('image/png'); link.click();
+});
+
+// --- Export individual frames ---
+exportFramesBtn.addEventListener('click',()=>{
+  if (!sourceImage) return;
+  const tempC=document.createElement('canvas');
+  tempC.width=sourceImage.width; tempC.height=sourceImage.height;
+  const tempCtx=tempC.getContext('2d');
+  tempCtx.drawImage(sourceImage,0,0);
+  const cleanData=applyMask(tempCtx.getImageData(0,0,tempC.width,tempC.height));
+
+  for (let i=0; i<numFrames(); i++) {
+    const b=getFrameBounds(i); if (!b) continue;
+    const frameC=document.createElement('canvas');
+    frameC.width=b.width; frameC.height=sourceImage.height;
+    const fctx=frameC.getContext('2d');
+    const fd=fctx.createImageData(b.width,sourceImage.height);
+    for (let y=0; y<sourceImage.height; y++) for (let x=0; x<b.width; x++) {
+      const si=(y*sourceImage.width+(b.x+x))*4, di=(y*b.width+x)*4;
+      fd.data[di]=cleanData.data[si]; fd.data[di+1]=cleanData.data[si+1];
+      fd.data[di+2]=cleanData.data[si+2]; fd.data[di+3]=cleanData.data[si+3];
+    }
+    fctx.putImageData(fd,0,0);
+    const link=document.createElement('a');
+    link.download=`frame_${i+1}.png`; link.href=frameC.toDataURL('image/png');
+    link.click();
+  }
+});
+
+// --- Init ---
+render();
+</script>
+</body>
+</html>

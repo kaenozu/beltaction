@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite Combiner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #eee; font-family: system-ui, sans-serif; padding: 20px; }
+h1 { font-size: 20px; margin-bottom: 16px; color: #ff6b6b; }
+p { font-size: 13px; color: #aaa; margin-bottom: 16px; }
+.grid { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.slot {
+  width: 160px; height: 192px; border: 2px dashed #555; border-radius: 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; position: relative; font-size: 12px; color: #666;
+  background: repeating-conic-gradient(#222 0% 25%, #333 0% 50%) 0 0 / 16px 16px;
+}
+.slot.has-image { border-color: #4dabf7; border-style: solid; }
+.slot canvas { position: absolute; top: 0; left: 0; width: 160px; height: 192px; image-rendering: pixelated; }
+.slot .label { position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 2px; font-size: 11px; color: #fff; z-index: 1; }
+.controls { display: flex; gap: 12px; align-items: center; }
+.controls button {
+  background: #ff6b6b; color: #fff; border: none; padding: 8px 20px; border-radius: 4px;
+  font-size: 14px; cursor: pointer; font-weight: bold;
+}
+.controls button:hover { background: #ff5252; }
+.controls button:disabled { background: #555; cursor: not-allowed; }
+.preview { margin-top: 20px; }
+.preview canvas { border: 1px solid #444; image-rendering: pixelated; background: repeating-conic-gradient(#222 0% 25%, #333 0% 50%) 0 0 / 16px 16px; }
+.info { font-size: 12px; color: #888; margin-top: 6px; }
+.slot input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Sprite Combiner</h1>
+<p>Load 4 individual frame PNGs (160×192 each) → combine into a 640×192 sprite sheet</p>
+
+<div class="grid" id="slotGrid">
+  <div class="slot" data-idx="0"><div class="label">Frame 1</div><input type="file" accept="image/*"></div>
+  <div class="slot" data-idx="1"><div class="label">Frame 2</div><input type="file" accept="image/*"></div>
+  <div class="slot" data-idx="2"><div class="label">Frame 3</div><input type="file" accept="image/*"></div>
+  <div class="slot" data-idx="3"><div class="label">Frame 4</div><input type="file" accept="image/*"></div>
+</div>
+
+<div class="controls">
+  <button id="combineBtn" disabled>⬇ Export 640×192 sheet</button>
+</div>
+
+<div class="preview">
+  <canvas id="previewCanvas"></canvas>
+  <div id="previewInfo" class="info"></div>
+</div>
+
+<script>
+const slotGrid = document.getElementById('slotGrid');
+const combineBtn = document.getElementById('combineBtn');
+const previewCanvas = document.getElementById('previewCanvas');
+const previewInfo = document.getElementById('previewInfo');
+
+const frames = [null, null, null, null];
+const FW = 160, FH = 192;
+
+// --- Setup slots ---
+document.querySelectorAll('.slot').forEach((slot, idx) => {
+  const input = slot.querySelector('input[type="file"]');
+  input.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      frames[idx] = img;
+      // Draw into slot
+      let cv = slot.querySelector('canvas');
+      if (!cv) {
+        cv = document.createElement('canvas');
+        cv.width = FW; cv.height = FH;
+        slot.appendChild(cv);
+      }
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0, FW, FH);
+      slot.classList.add('has-image');
+      updateCombineButton();
+      updatePreview();
+    };
+    img.src = URL.createObjectURL(file);
+  });
+
+  // Click slot to trigger file picker
+  slot.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'CANVAS' && e.target.tagName !== 'INPUT') {
+      input.click();
+    }
+  });
+});
+
+// --- Update button state ---
+function updateCombineButton() {
+  const allLoaded = frames.every(f => f !== null);
+  combineBtn.disabled = !allLoaded;
+}
+
+// --- Update preview ---
+function updatePreview() {
+  const allLoaded = frames.every(f => f !== null);
+  if (!allLoaded) return;
+
+  previewCanvas.width = FW * 4;
+  previewCanvas.height = FH;
+  const ctx = previewCanvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  for (let i = 0; i < 4; i++) {
+    ctx.drawImage(frames[i], i * FW, 0, FW, FH);
+  }
+
+  previewInfo.textContent = `Preview: ${FW * 4}×${FH} PNG · ${frames.every(f => f !== null) ? 'Ready to export' : 'Load all 4 frames'}`;
+}
+
+// --- Export ---
+combineBtn.addEventListener('click', () => {
+  updatePreview();
+  const link = document.createElement('a');
+  link.download = 'maki_spritesheet.png';
+  link.href = previewCanvas.toDataURL('image/png');
+  link.click();
+});
+</script>
+</body>
+</html>

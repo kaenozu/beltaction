@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Green Remover</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #eee; font-family: system-ui, sans-serif; padding: 20px; }
+h1 { font-size: 20px; margin-bottom: 16px; color: #4dabf7; }
+.controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.controls label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.controls input[type="file"] { font-size: 13px; color: #eee; }
+.controls input[type="file"]::file-selector-button { background: #333; color: #eee; border: 1px solid #555; border-radius: 2px; padding: 2px 8px; cursor: pointer; }
+.controls input[type="range"] { width: 100px; }
+.controls button {
+  background: #4dabf7; color: #fff; border: none; padding: 6px 16px; border-radius: 4px;
+  font-size: 13px; cursor: pointer; font-weight: bold;
+}
+.controls button:hover { background: #3794e0; }
+.controls button.export-all { background: #ff6b6b; }
+.controls button.export-all:hover { background: #ff5252; }
+.info { font-size: 12px; color: #888; margin-top: 6px; }
+.file-list { display: flex; flex-direction: column; gap: 12px; }
+.file-item {
+  background: #16213e; border: 1px solid #333; border-radius: 6px; padding: 12px;
+  display: flex; gap: 16px; align-items: flex-start;
+}
+.file-item .thumb { position: relative; flex-shrink: 0; }
+.file-item .thumb canvas { width: 160px; height: auto; image-rendering: pixelated; background: repeating-conic-gradient(#222 0% 25%, #333 0% 50%) 0 0 / 16px 16px; border: 1px solid #444; }
+.file-item .thumb canvas.result { width: 160px; }
+.file-item .meta { font-size: 12px; color: #aaa; line-height: 1.6; flex: 1; }
+.file-item .meta .filename { font-size: 13px; color: #eee; font-weight: bold; }
+.thumb-group { display: flex; gap: 12px; }
+.empty { color: #555; font-size: 13px; padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>Green Remover</h1>
+
+<div class="controls">
+  <input type="file" id="fileInput" accept="image/*" multiple>
+  <label>Threshold <input type="range" id="toleranceSlider" min="0" max="100" value="30"></label>
+  <button class="export-all" id="exportAllBtn">⬇ Export all</button>
+</div>
+
+<div class="info">Drop or select multiple PNG files. Each file's green background will be automatically removed.</div>
+
+<div id="fileList" class="file-list"></div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+const toleranceSlider = document.getElementById('toleranceSlider');
+const exportAllBtn = document.getElementById('exportAllBtn');
+
+const entries = []; // { file, name, dataUrl }
+
+// --- Load ---
+fileInput.addEventListener('change', (e) => {
+  for (const file of e.target.files) {
+    const img = new Image();
+    img.onload = () => {
+      processFile(file.name, img);
+    };
+    img.src = URL.createObjectURL(file);
+  }
+  // Reset so same files can be re-selected
+  fileInput.value = '';
+});
+
+// --- Tolerance change reprocesses all ---
+toleranceSlider.addEventListener('input', () => {
+  for (const entry of entries) {
+    const img = new Image();
+    img.onload = () => {
+      entry.resultDataUrl = removeGreen(img);
+      const resultCanvas = entry.el.querySelector('.result');
+      const rctx = resultCanvas.getContext('2d');
+      const tmp = new Image();
+      tmp.onload = () => { rctx.drawImage(tmp, 0, 0); };
+      tmp.src = entry.resultDataUrl;
+    };
+    img.src = entry.originalDataUrl;
+  }
+});
+
+// --- Process a file ---
+function processFile(name, img) {
+  const originalDataUrl = imgToDataUrl(img);
+  const resultDataUrl = removeGreen(img);
+
+  const el = document.createElement('div');
+  el.className = 'file-item';
+  el.innerHTML = `
+    <div class="thumb-group">
+      <div class="thumb"><canvas class="original"></canvas></div>
+      <div class="thumb"><canvas class="result"></canvas></div>
+    </div>
+    <div class="meta">
+      <div class="filename">${name}</div>
+      <div>${img.width}×${img.height}</div>
+    </div>
+  `;
+
+  const origCanvas = el.querySelector('.original');
+  origCanvas.width = Math.min(img.width, 160);
+  origCanvas.height = img.height * (origCanvas.width / img.width);
+  const octx = origCanvas.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(img, 0, 0, origCanvas.width, origCanvas.height);
+
+  const resultCanvas = el.querySelector('.result');
+  const rctx = resultCanvas.getContext('2d');
+  const tmp = new Image();
+  tmp.onload = () => {
+    resultCanvas.width = Math.min(tmp.width, 160);
+    resultCanvas.height = tmp.height * (resultCanvas.width / tmp.width);
+    rctx.imageSmoothingEnabled = false;
+    rctx.drawImage(tmp, 0, 0, resultCanvas.width, resultCanvas.height);
+  };
+  tmp.src = resultDataUrl;
+
+  entries.push({ file: name, name, originalDataUrl, resultDataUrl, el });
+  fileList.appendChild(el);
+}
+
+// --- Green removal ---
+function removeGreen(img) {
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, img.width, img.height);
+  const d = data.data;
+
+  const tolerance = parseInt(toleranceSlider.value);
+  const maxDist = (tolerance / 100) * 441;
+
+  // Auto-detect bg color from corners (pick most green)
+  const corners = [
+    [d[0], d[1], d[2]],
+    [d[(img.width - 1) * 4], d[(img.width - 1) * 4 + 1], d[(img.width - 1) * 4 + 2]],
+    [d[(img.height - 1) * img.width * 4], d[(img.height - 1) * img.width * 4 + 1], d[(img.height - 1) * img.width * 4 + 2]],
+    [d[(img.width * img.height - 1) * 4], d[(img.width * img.height - 1) * 4 + 1], d[(img.width * img.height - 1) * 4 + 2]],
+  ];
+  let bg = corners[0];
+  for (const c of corners) { if (c[1] > bg[1]) bg = c; }
+
+  for (let i = 0; i < d.length; i += 4) {
+    const dr = d[i] - bg[0], dg = d[i + 1] - bg[1], db = d[i + 2] - bg[2];
+    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+    if (dist < maxDist) {
+      d[i + 3] = 0;
+    } else if (dist < maxDist + 20) {
+      d[i + 3] = Math.round(255 * (dist - maxDist) / 20);
+    }
+  }
+  ctx.putImageData(data, 0, 0);
+  return c.toDataURL('image/png');
+}
+
+function imgToDataUrl(img) {
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  return c.toDataURL('image/png');
+}
+
+// --- Export all (sequential downloads) ---
+exportAllBtn.addEventListener('click', async () => {
+  if (entries.length === 0) return;
+
+  for (const entry of entries) {
+    const baseName = entry.name.replace(/\.[^.]+$/, '');
+    const link = document.createElement('a');
+    link.download = `${baseName}_clean.png`;
+    link.href = entry.resultDataUrl;
+    link.click();
+    // Small delay so browser registers separate downloads
+    await new Promise(r => setTimeout(r, 200));
+  }
+});
+</script>
+</body>
+</html>
