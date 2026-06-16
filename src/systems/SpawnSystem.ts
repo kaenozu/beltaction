@@ -1,6 +1,7 @@
 import { Entity } from '../engine/Game';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
+import { HitEffect } from '../effects/HitEffect';
 
 function rectsOverlap(
   ax: number, ay: number, aw: number, ah: number,
@@ -14,6 +15,7 @@ export class SpawnSystem extends Entity {
   private _spriteImage: HTMLImageElement | null = null;
   private playerAttackHit: boolean = false;
   private readonly ATTACK_RANGE = 60;
+  private effects: HitEffect[] = [];
   
   get spriteImage(): HTMLImageElement | null { return this._spriteImage; }
   set spriteImage(img: HTMLImageElement | null) {
@@ -32,6 +34,12 @@ export class SpawnSystem extends Entity {
     }
     if (this.enemy) this.enemy.update(dt);
     this.checkPlayerAttack();
+    
+    // Update effects
+    for (const effect of this.effects) {
+      if (effect.active) effect.update(dt);
+    }
+    this.effects = this.effects.filter(e => e.active);
   }
   
   private checkPlayerAttack(): void {
@@ -62,6 +70,7 @@ export class SpawnSystem extends Entity {
     if (rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)) {
       this.enemy.takeDamage(20);
       this.playerAttackHit = true;
+      this.spawnHitEffect((bx + bw / 2 + ax + aw / 2) / 2, by + bh / 2);
     }
   }
   
@@ -70,7 +79,12 @@ export class SpawnSystem extends Entity {
     const spawnX = player.x + player.width * 2 + Math.random() * 80;
     const enemy = new Enemy(spawnX, 300, this.getPlayer);
     enemy.spriteImage = this.spriteImage;
+    enemy.onHit = (x: number, y: number) => this.spawnHitEffect(x, y);
     this.enemy = enemy;
+  }
+  
+  private spawnHitEffect(x: number, y: number): void {
+    this.effects.push(new HitEffect(x, y));
   }
   
   getEnemies(): Enemy[] {
@@ -78,6 +92,9 @@ export class SpawnSystem extends Entity {
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
+    for (const effect of this.effects) {
+      if (effect.active) effect.render(ctx);
+    }
     if (this.enemy && this.enemy.active) this.enemy.render(ctx);
   }
 }

@@ -10,7 +10,8 @@ export class Enemy extends Entity {
   private velocityY: number = 0;
   private readonly GRAVITY = 800;
   private readonly MOVE_SPEED = 60;
-  private readonly ATTACK_RANGE = 80;
+  private readonly STOP_RANGE = 120;
+  private readonly ATTACK_RANGE = 60;
   private readonly ATTACK_COOLDOWN = 1.5;
   private state: EnemyState = 'walk';
   private stateTimer: number = 0;
@@ -25,6 +26,7 @@ export class Enemy extends Entity {
   private readonly ANIM_SPEED = 0.25;
   
   public spriteImage: HTMLImageElement | null = null;
+  public onHit: ((x: number, y: number) => void) | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
   
@@ -67,6 +69,7 @@ export class Enemy extends Entity {
         this.attackHit = true;
         player.health -= this.damage;
         player.hurt();
+        this.onHit?.(this.x + this.width / 2, this.y + this.height / 2);
       }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
