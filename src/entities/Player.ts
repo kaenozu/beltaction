@@ -119,8 +119,6 @@ export class Player extends Entity {
     if (this.state === 'hurt') return; // Invincible during hurt
     this.state = 'hurt';
     this.stateTimer = 0.15;
-    // Knockback away from attacker
-    this.velocityX = this.facing * -200;
   }
   
   private applyPhysics(dt: number): void {

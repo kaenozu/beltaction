@@ -8,8 +8,7 @@
 import { Entity } from '../engine/Game';
 
 export class HitEffect extends Entity {
-  private timer: number = 0.15;
-  private readonly maxRadius: number = 20;
+  private timer: number = 0.18;
 
   constructor(x: number, y: number) {
     super(x, y);
@@ -23,23 +22,27 @@ export class HitEffect extends Entity {
   }
 
   override render(ctx: CanvasRenderingContext2D): void {
-    const progress = 1 - this.timer / 0.15;
-    const radius = 4 + progress * this.maxRadius;
-    const alpha = Math.max(0, 1 - progress * 1.2);
+    const t = Math.max(0, this.timer / 0.18);
+    const r = 8 + (1 - t) * 24;
 
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = t;
+    // Outer ring
     ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
     ctx.stroke();
-    // Inner flash
-    ctx.fillStyle = '#ff0';
-    ctx.globalAlpha = alpha * 0.4;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, radius * 0.3, 0, Math.PI * 2);
-    ctx.fill();
+    // Rays
+    ctx.strokeStyle = '#ff0';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x + Math.cos(angle) * r * 1.5, this.y + Math.sin(angle) * r * 1.5);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }

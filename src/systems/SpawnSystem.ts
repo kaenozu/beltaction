@@ -92,9 +92,9 @@ export class SpawnSystem extends Entity {
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
+    if (this.enemy && this.enemy.active) this.enemy.render(ctx);
     for (const effect of this.effects) {
       if (effect.active) effect.render(ctx);
     }
-    if (this.enemy && this.enemy.active) this.enemy.render(ctx);
   }
 }
