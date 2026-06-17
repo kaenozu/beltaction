@@ -58,14 +58,14 @@ gruntSheet.onload = () => {
 
 game.setBackground(stage);
 
-game.addEntity(player);
 game.addEntity(spawner);
+game.addEntity(player);
 
 function updateInputs(): void {
   player.setInput(input.getState('player1'));
   stage.setPosition(player.x);
   const enemies = spawner.getEnemies();
-  const enemyHP = enemies.length > 0 ? ` Enemy:${enemies[0].health}` : '';
+  const enemyHP = enemies.length > 0 ? ` Enemy:${enemies.length} HP:${enemies[0].health}` : '';
   const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';
   hud.textContent = `HP: ${player.health}${enemyHP}${debugInfo}`;
   requestAnimationFrame(updateInputs);
@@ -78,4 +78,5 @@ game.start();
 document.addEventListener('keydown', (e) => {
   if (e.key === 'h') player.hurt();
   if (e.key === 'b') DebugFlags.showHitboxes = !DebugFlags.showHitboxes;
+  if (e.key === 'e') spawner.spawnEnemy();
 });

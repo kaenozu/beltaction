@@ -2,24 +2,26 @@ import { Entity } from '../engine/Game';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { HitEffect } from '../effects/HitEffect';
+import { HitboxRect } from './HitboxConfig';
 
-function rectsOverlap(
-  ax: number, ay: number, aw: number, ah: number,
-  bx: number, by: number, bw: number, bh: number,
-): boolean {
-  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 export class SpawnSystem extends Entity {
-  private enemy: Enemy | null = null;
+  private enemies: Enemy[] = [];
   private _spriteImage: HTMLImageElement | null = null;
-  private playerAttackHit: boolean = false;
+  private playerAttackHits: Set<Enemy> = new Set();
   private effects: HitEffect[] = [];
+  private readonly ENGAGE_OFFSETS = [58, -58, 30, -30, 0, 45, -45];
+  private readonly GROUND_Y = 480 - 192;
   
   get spriteImage(): HTMLImageElement | null { return this._spriteImage; }
   set spriteImage(img: HTMLImageElement | null) {
     this._spriteImage = img;
-    if (this.enemy) this.enemy.spriteImage = img;
+    for (const enemy of this.enemies) {
+      enemy.spriteImage = img;
+    }
   }
   
   constructor(private getPlayer: () => Player) {
@@ -28,10 +30,11 @@ export class SpawnSystem extends Entity {
   
   override update(dt: number): void {
     if (!this._spriteImage) return;
-    if (!this.enemy || !this.enemy.active) {
-      this.spawnEnemy();
+    this.assignEnemyTargets();
+    for (const enemy of this.enemies) {
+      if (enemy.active) enemy.update(dt);
     }
-    if (this.enemy) this.enemy.update(dt);
+    this.enemies = this.enemies.filter(enemy => enemy.active);
     this.checkPlayerAttack();
     
     // Update effects
@@ -43,42 +46,53 @@ export class SpawnSystem extends Entity {
   
   private checkPlayerAttack(): void {
     const player = this.getPlayer();
-    if (!this.enemy || !this.enemy.active) return;
     
     // Reset if player is not in attack state
     if (player.state !== 'attack') {
-      this.playerAttackHit = false;
+      this.playerAttackHits.clear();
       return;
     }
     
-    // Only hit on strike frame and once per attack
-    if (this.playerAttackHit) return;
-    
     const atk = player.getAttackHitbox();
     if (!atk) return;
-    
-    const bx = this.enemy.x;
-    const by = this.enemy.y;
-    const bw = this.enemy.width;
-    const bh = this.enemy.height;
-    
-    if (rectsOverlap(atk.x, atk.y, atk.w, atk.h, bx, by, bw, bh)) {
-      this.enemy.takeDamage(20);
-      this.playerAttackHit = true;
-      // Effect at center of overlap between attack box and enemy hitbox
-      const left = Math.max(atk.x, bx);
-      const right = Math.min(atk.x + atk.w, bx + bw);
-      this.spawnHitEffect((left + right) / 2, by + bh / 2);
+
+    for (const enemy of this.enemies) {
+      if (this.playerAttackHits.has(enemy)) continue;
+      const hurt = enemy.getHurtHitbox();
+
+      if (rectsOverlap(atk, hurt)) {
+        enemy.takeDamage(20);
+        this.playerAttackHits.add(enemy);
+        const left = Math.max(atk.x, hurt.x);
+        const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
+        const top = Math.max(atk.y, hurt.y);
+        const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
+        this.spawnHitEffect((left + right) / 2, (top + bottom) / 2);
+      }
     }
   }
+
+  private assignEnemyTargets(): void {
+    const player = this.getPlayer();
+    const activeEnemies = this.enemies.filter(enemy => enemy.active);
+
+    activeEnemies
+      .sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))
+      .forEach((enemy, index) => {
+        const fallbackStep = Math.floor(index / 2) + 1;
+        const fallbackSide = index % 2 === 0 ? 1 : -1;
+        const offset = this.ENGAGE_OFFSETS[index] ?? fallbackSide * (90 + fallbackStep * 55);
+        enemy.setTargetX(player.x + offset);
+      });
+  }
   
-  private spawnEnemy(): void {
+  spawnEnemy(): void {
     const player = this.getPlayer();
     const spawnX = player.x + player.width * 2 + Math.random() * 80;
-    const enemy = new Enemy(spawnX, 300, this.getPlayer);
+    const enemy = new Enemy(spawnX, this.GROUND_Y, this.getPlayer);
     enemy.spriteImage = this.spriteImage;
     enemy.onHit = (x: number, y: number) => this.spawnHitEffect(x, y);
-    this.enemy = enemy;
+    this.enemies.push(enemy);
   }
   
   private spawnHitEffect(x: number, y: number): void {
@@ -86,11 +100,14 @@ export class SpawnSystem extends Entity {
   }
   
   getEnemies(): Enemy[] {
-    return this.enemy ? [this.enemy] : [];
+    return this.enemies.filter(enemy => enemy.active);
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
-    if (this.enemy && this.enemy.active) this.enemy.render(ctx);
+    const enemiesToRender = [...this.enemies].sort((a, b) => a.y - b.y);
+    for (const enemy of enemiesToRender) {
+      if (enemy.active) enemy.render(ctx);
+    }
     for (const effect of this.effects) {
       if (effect.active) effect.render(ctx);
     }

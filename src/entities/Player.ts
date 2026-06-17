@@ -1,7 +1,7 @@
 import { Entity } from '../engine/Game';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
-import { HitboxConfig, MAKI_HITBOX } from '../systems/HitboxConfig';
+import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 
 export class Player extends Entity {
   private inputState!: InputState;
@@ -119,22 +119,28 @@ export class Player extends Entity {
   }
   
   public hurt(fromX?: number): void {
-    if (this.state === 'hurt') return; // Invincible during hurt
     this.state = 'hurt';
-    this.stateTimer = 0.15;
+    this.stateTimer = 0.35;
+    this.velocityX = 0;
+    this.animTimer = 0;
+    this.currentFrame = 0;
     if (fromX !== undefined) {
       this.facing = fromX > this.x ? 1 : -1;
     }
   }
   
   /** Current attack hitbox in world coords, or null if not on strike frame */
-  getAttackHitbox(): { x: number; y: number; w: number; h: number } | null {
+  getAttackHitbox(): HitboxRect | null {
     if (this.state !== 'attack' || this.currentFrame !== 1) return null;
-    const hb = this.hitboxConfig.hitboxes.attack;
-    if (this.facing > 0) {
-      return { x: this.x + hb.x, y: this.y + hb.y, w: hb.w, h: hb.h };
-    }
-    return { x: this.x + this.width - hb.x - hb.w, y: this.y + hb.y, w: hb.w, h: hb.h };
+    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
+  }
+
+  getBodyHitbox(): HitboxRect {
+    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.body, this.facing);
+  }
+
+  getHurtHitbox(): HitboxRect {
+    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.hurt, this.facing);
   }
   
   private applyPhysics(dt: number): void {
@@ -190,8 +196,13 @@ export class Player extends Entity {
     if (DebugFlags.showHitboxes) {
       ctx.strokeStyle = '#0f0';
       ctx.lineWidth = 1;
-      ctx.strokeRect(this.x, this.y, this.width, this.height);
-      // Attack hitbox (from config)
+      const body = this.getBodyHitbox();
+      ctx.strokeRect(body.x, body.y, body.w, body.h);
+
+      ctx.strokeStyle = '#0ff';
+      const hurt = this.getHurtHitbox();
+      ctx.strokeRect(hurt.x, hurt.y, hurt.w, hurt.h);
+
       const atk = this.getAttackHitbox();
       if (atk) {
         ctx.strokeStyle = '#f80';

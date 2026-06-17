@@ -8,11 +8,36 @@
     body { margin: 0; padding: 0; background: #000; overflow: hidden; }
     canvas { display: block; margin: 0 auto; background: #111; }
     #hud { position: absolute; top: 10px; left: 10px; color: #fff; font-family: monospace; font-size: 16px; z-index: 10; }
+    #shortcuts {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: #ddd;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      text-align: right;
+      z-index: 10;
+      text-shadow: 1px 1px 0 #000;
+      user-select: none;
+    }
+    #shortcuts kbd {
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas" width="640" height="480"></canvas>
   <div id="hud"></div>
+  <div id="shortcuts" aria-label="Keyboard shortcuts">
+    <div><kbd>A/D</kbd> Move</div>
+    <div><kbd>Space</kbd> Jump</div>
+    <div><kbd>J</kbd> Attack</div>
+    <div><kbd>E</kbd> Spawn</div>
+    <div><kbd>B</kbd> Boxes</div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -1,25 +1,33 @@
 import { Entity } from '../engine/Game';
 import { Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
-import { HitboxConfig, GRUNT_HITBOX } from '../systems/HitboxConfig';
+import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 
 type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt';
+
+function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
 
 export class Enemy extends Entity {
   public health: number = 30;
   public damage: number = 5;
   private velocityX: number = 0;
-  private velocityY: number = 0;
-  private readonly GRAVITY = 800;
   private readonly MOVE_SPEED = 60;
   private readonly STOP_RANGE = 90;
   private readonly ATTACK_RANGE = 70;
   private readonly ATTACK_COOLDOWN = 1.5;
+  private readonly RETREAT_RANGE = 130;
+  private readonly RETREAT_SPEED = 45;
+  private readonly TOO_CLOSE_RANGE = 24;
+  private readonly FLANK_DISTANCE = 58;
+  private readonly FLANK_SPEED = 105;
   private state: EnemyState = 'walk';
   private stateTimer: number = 0;
   private attackCooldown: number = 0;
   private behaviorTimer: number = 0.5;
   private attackHit: boolean = false;
+  private flankTargetX: number | null = null;
   private readonly BEHAVIOR_WALK_DURATION = 1.5;
   private readonly BEHAVIOR_IDLE_DURATION = 0.8;
   private facing: number = -1;
@@ -29,6 +37,7 @@ export class Enemy extends Entity {
   
   public spriteImage: HTMLImageElement | null = null;
   public onHit: ((x: number, y: number) => void) | null = null;
+  private targetX: number | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
   private hitboxConfig: HitboxConfig = GRUNT_HITBOX;
@@ -41,7 +50,9 @@ export class Enemy extends Entity {
   
   override update(dt: number): void {
     const player = this.player();
+    const targetX = this.targetX ?? player.x;
     const dx = player.x - this.x;
+    const dxToTarget = targetX - this.x;
     this.facing = dx > 0 ? 1 : -1;
     
     this.attackCooldown -= dt;
@@ -69,15 +80,17 @@ export class Enemy extends Entity {
     if (this.state === 'attack') {
       // Check hit on strike frame
       if (this.currentFrame === 1 && !this.attackHit) {
-        this.attackHit = true;
-        player.health -= this.damage;
-        player.hurt(this.x);
-        // Effect at center of overlap between enemy attack and player
         const atk = this.getAttackHitbox();
-        if (atk) {
-          const left = Math.max(atk.x, player.x);
-          const right = Math.min(atk.x + atk.w, player.x + player.width);
-          this.onHit?.((left + right) / 2, player.y + player.height / 2);
+        const hurt = player.getHurtHitbox();
+        this.attackHit = true;
+        if (atk && rectsOverlap(atk, hurt)) {
+          player.health -= this.damage;
+          player.hurt(this.x);
+          const left = Math.max(atk.x, hurt.x);
+          const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
+          const top = Math.max(atk.y, hurt.y);
+          const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
+          this.onHit?.((left + right) / 2, (top + bottom) / 2);
         }
       }
       this.applyPhysics(dt);
@@ -86,9 +99,20 @@ export class Enemy extends Entity {
     }
     
     const dist = Math.abs(dx);
+    const targetDist = Math.abs(dxToTarget);
+    if (dist < this.TOO_CLOSE_RANGE && this.flankTargetX === null) {
+      const passDirection = this.x < player.x ? 1 : -1;
+      this.flankTargetX = player.x + passDirection * this.FLANK_DISTANCE;
+    }
+    if (this.flankTargetX !== null && Math.abs(this.flankTargetX - this.x) < 8) {
+      this.flankTargetX = null;
+    }
     
     // Attack if within range and cooldown ready
-    if (dist < this.ATTACK_RANGE && this.attackCooldown <= 0) {
+    if (this.flankTargetX !== null) {
+      this.state = 'walk';
+      this.velocityX = Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED;
+    } else if (dist < this.ATTACK_RANGE && this.attackCooldown <= 0) {
       this.state = 'attack';
       this.stateTimer = 0.4;
       this.animTimer = 0;
@@ -96,18 +120,18 @@ export class Enemy extends Entity {
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
       this.attackHit = false;
+    } else if (this.attackCooldown > 0 && dist < this.RETREAT_RANGE) {
+      this.state = 'walk';
+      this.velocityX = -this.facing * this.RETREAT_SPEED;
     } else if (dist < this.ATTACK_RANGE) {
-      // Within attack range but on cooldown — wait
       this.velocityX = 0;
-      if (this.state !== 'attack' && this.state !== 'hurt') {
-        this.state = 'idle';
-      }
-    } else if (dist < this.STOP_RANGE) {
-      // Creep forward to enter attack range
-      if (this.state !== 'attack' && this.state !== 'hurt') {
-        this.state = 'walk';
-      }
-      this.velocityX = this.facing * this.MOVE_SPEED * 0.5;
+      this.state = 'idle';
+    } else if (targetDist < 12) {
+      this.velocityX = 0;
+      this.state = 'idle';
+    } else if (targetDist < this.STOP_RANGE) {
+      this.state = 'walk';
+      this.velocityX = Math.sign(dxToTarget) * this.MOVE_SPEED * 0.5;
     } else {
       if (this.behaviorTimer <= 0) {
         if (this.state === 'walk') {
@@ -120,23 +144,20 @@ export class Enemy extends Entity {
         }
       }
       if (this.state === 'walk') {
-        this.velocityX = this.facing * this.MOVE_SPEED;
+        this.velocityX = Math.sign(dxToTarget) * this.MOVE_SPEED;
       }
     }
     
     this.applyPhysics(dt);
     this.updateAnimation(dt);
   }
+
+  setTargetX(targetX: number): void {
+    this.targetX = targetX;
+  }
   
   private applyPhysics(dt: number): void {
-    this.velocityY += this.GRAVITY * dt;
     this.x += this.velocityX * dt;
-    this.y += this.velocityY * dt;
-    
-    if (this.y > 480 - this.height) {
-      this.y = 480 - this.height;
-      this.velocityY = 0;
-    }
   }
   
   private updateAnimation(dt: number): void {
@@ -164,13 +185,17 @@ export class Enemy extends Entity {
   }
   
   /** Current attack hitbox in world coords, or null if not on strike frame */
-  getAttackHitbox(): { x: number; y: number; w: number; h: number } | null {
+  getAttackHitbox(): HitboxRect | null {
     if (this.state !== 'attack' || this.currentFrame !== 1) return null;
-    const hb = this.hitboxConfig.hitboxes.attack;
-    if (this.facing > 0) {
-      return { x: this.x + hb.x, y: this.y + hb.y, w: hb.w, h: hb.h };
-    }
-    return { x: this.x + this.width - hb.x - hb.w, y: this.y + hb.y, w: hb.w, h: hb.h };
+    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
+  }
+
+  getBodyHitbox(): HitboxRect {
+    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.body, this.facing);
+  }
+
+  getHurtHitbox(): HitboxRect {
+    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.hurt, this.facing);
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
@@ -217,11 +242,15 @@ export class Enemy extends Entity {
     
     // Debug: collision box
     if (DebugFlags.showHitboxes) {
-      // Collision box
       ctx.strokeStyle = '#f00';
       ctx.lineWidth = 1;
-      ctx.strokeRect(this.x, this.y, this.width, this.height);
-      // Attack hitbox (from config)
+      const body = this.getBodyHitbox();
+      ctx.strokeRect(body.x, body.y, body.w, body.h);
+
+      ctx.strokeStyle = '#0ff';
+      const hurt = this.getHurtHitbox();
+      ctx.strokeRect(hurt.x, hurt.y, hurt.w, hurt.h);
+
       const atk = this.getAttackHitbox();
       if (atk) {
         ctx.strokeStyle = '#f80';
