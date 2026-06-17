@@ -9,6 +9,8 @@ import walkUrl from '/assets/maki_spritesheet.png';
 import attackUrl from '/assets/maki_attack.png';
 import jumpUrl from '/assets/maki_jump.png';
 import hurtUrl from '/assets/maki_hurt.png';
+import downUrl from '/assets/maki_down.png';
+import downHitUrl from '/assets/maki_downhit.png';
 import gruntUrl from '/assets/grunt_spritesheet.png';
 import gruntHurtUrl from '/assets/grunt_hurt.png';
 
@@ -51,6 +53,18 @@ hurtImg.onload = () => {
   player.hurtImage = hurtImg;
 };
 
+const downImg = new Image();
+downImg.src = downUrl;
+downImg.onload = () => {
+  player.downImage = downImg;
+};
+
+const downHitImg = new Image();
+downHitImg.src = downHitUrl;
+downHitImg.onload = () => {
+  player.downHitImage = downHitImg;
+};
+
 const gruntSheet = new Image();
 gruntSheet.src = gruntUrl;
 gruntSheet.onload = () => {
@@ -79,7 +93,10 @@ function updateInputs(): void {
   const enemies = spawner.getEnemies();
   const enemyHP = enemies.length > 0 ? ` Enemy:${enemies.length} HP:${enemies[0].health}` : '';
   const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';
-  hud.textContent = `HP: ${player.health}${enemyHP}${debugInfo}`;
+  const postGameAttackInfo = DebugFlags.allowPostGameOverAttacks ? ' [POST-HIT]' : '';
+  hud.textContent = player.isGameOver
+    ? `GAME OVER - Refresh to restart${debugInfo}${postGameAttackInfo}`
+    : `HP: ${player.health}${enemyHP}${debugInfo}${postGameAttackInfo}`;
   requestAnimationFrame(updateInputs);
 }
 updateInputs();
@@ -90,5 +107,6 @@ game.start();
 document.addEventListener('keydown', (e) => {
   if (e.key === 'h') player.hurt();
   if (e.key === 'b') DebugFlags.showHitboxes = !DebugFlags.showHitboxes;
+  if (e.key === 'g') DebugFlags.allowPostGameOverAttacks = !DebugFlags.allowPostGameOverAttacks;
   if (e.key === 'e') spawner.spawnEnemy();
 });

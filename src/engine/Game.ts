@@ -27,6 +27,7 @@ export class Game {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
+    this.ctx.imageSmoothingEnabled = false;
   }
   
   setBackground(entity: Entity): void {
@@ -76,6 +77,7 @@ export class Game {
   }
   
   private render(): void {
+    this.ctx.imageSmoothingEnabled = false;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     if (this.backgroundEntity) this.backgroundEntity.render(this.ctx);
     this.ctx.save();

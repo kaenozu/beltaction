@@ -10,9 +10,16 @@ export class Player extends Entity {
   public velocityY: number = 0;
   private onGround: boolean = true;
   private facing: number = 1;
-  state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' | 'death' = 'idle';
+  state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' | 'death' | 'down' | 'downhit' = 'idle';
   onDeath: (() => void) | null = null;
   private stateTimer: number = 0;
+  private groundHitCount: number = 0;
+  private postGameGroundHitCount: number = 0;
+  private downGraceTimer: number = 0;
+  private gameOverAnnounced: boolean = false;
+  private readonly MAX_GROUND_HITS = 1;
+  private readonly POST_GAME_DEATH_REPLAY_HITS = 3;
+  private readonly DOWN_GRACE_DURATION = 1.0;
   private readonly GRAVITY = 1200;
   private readonly MOVE_SPEED = 220;
   private readonly JUMP_FORCE = -500;
@@ -22,6 +29,8 @@ export class Player extends Entity {
   public attackImage: HTMLImageElement | null = null;
   public jumpImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
+  public downImage: HTMLImageElement | null = null;
+  public downHitImage: HTMLImageElement | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
   currentFrame: number = 0;
@@ -31,6 +40,20 @@ export class Player extends Entity {
   private prevAttack: boolean = false;
   private rapidCount: number = 0;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
+  private readonly DOWN_SOURCE = { x: 33, y: 622, w: 1542, h: 302 };
+  private readonly DOWN_HIT_SOURCE = { x: 32, y: 275, w: 1706, h: 489 };
+  private readonly DOWN_DRAW_WIDTH = 190;
+  private readonly DOWN_HIT_DRAW_WIDTH = 190;
+  private readonly DOWN_DRAW_HEIGHT = 52;
+  private readonly DOWN_HIT_DRAW_HEIGHT = 56;
+  get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
+  get isGameOver(): boolean { return this.gameOverAnnounced; }
+  get canReceiveGroundHit(): boolean {
+    return this.health <= 0 && this.state === 'down' && !this.gameOverAnnounced && this.groundHitCount < this.MAX_GROUND_HITS;
+  }
+  get canReceivePostGameHit(): boolean {
+    return this.health <= 0 && this.gameOverAnnounced && (this.state === 'down' || this.state === 'downhit');
+  }
   
   constructor(x: number, y: number, private name: string) {
     super(x, y);
@@ -45,6 +68,7 @@ export class Player extends Entity {
   override update(dt: number): void {
     this.handleInput();
     this.updateStateTimer(dt);
+    this.updateDownGrace(dt);
     this.applyPhysics(dt);
     this.updateAnimation(dt);
   }
@@ -68,7 +92,7 @@ export class Player extends Entity {
   }
   
   private handleInput(): void {
-    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'death') return;
+    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'death' || this.state === 'down' || this.state === 'downhit') return;
     
     // Horizontal movement
     if (this.inputState.left) {
@@ -113,7 +137,15 @@ export class Player extends Entity {
         if (this.state === 'attack') {
           this.rapidCount = Math.max(0, this.rapidCount - 1);
         } else if (this.state === 'death') {
-          this.active = false;
+          this.state = 'down';
+          this.velocityX = 0;
+          this.velocityY = 0;
+          this.downGraceTimer = this.DOWN_GRACE_DURATION;
+          return;
+        } else if (this.state === 'downhit') {
+          this.state = 'down';
+          this.velocityX = 0;
+          this.announceGameOver();
           return;
         }
         this.velocityX = 0;
@@ -121,16 +153,65 @@ export class Player extends Entity {
       }
     }
   }
+
+  private updateDownGrace(dt: number): void {
+    if (this.health > 0 || this.state !== 'down' || this.gameOverAnnounced) return;
+    this.downGraceTimer = Math.max(0, this.downGraceTimer - dt);
+    if (this.downGraceTimer <= 0) this.announceGameOver();
+  }
+
+  private announceGameOver(): void {
+    if (this.gameOverAnnounced) return;
+    this.gameOverAnnounced = true;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.onDeath?.();
+  }
   
   public die(fromX: number): void {
+    if (this.isDefeated) return;
+    this.health = 0;
     this.state = 'death';
-    this.stateTimer = 1.0;
+    this.stateTimer = 0.5;
+    this.groundHitCount = 0;
+    this.postGameGroundHitCount = 0;
+    this.downGraceTimer = 0;
+    this.gameOverAnnounced = false;
     this.animTimer = 0;
     this.currentFrame = 0;
     this.velocityX = fromX > this.x ? -120 : 120;
-    this.velocityY = -300;
+    this.velocityY = -250;
     this.facing = fromX > this.x ? 1 : -1;
-    this.onDeath?.();
+  }
+
+  public downHit(fromX: number, force: boolean = false): void {
+    if (!force && !this.canReceiveGroundHit) return;
+    if (force && !this.canReceivePostGameHit) return;
+    if (force) {
+      this.postGameGroundHitCount++;
+      if (this.postGameGroundHitCount >= this.POST_GAME_DEATH_REPLAY_HITS) {
+        this.replayDeathFromGround(fromX);
+        return;
+      }
+    }
+    this.state = 'downhit';
+    this.stateTimer = 0.3;
+    if (!force) this.groundHitCount++;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.velocityX = fromX > this.x ? -60 : 60;
+    this.facing = fromX > this.x ? 1 : -1;
+  }
+
+  private replayDeathFromGround(fromX: number): void {
+    this.postGameGroundHitCount = 0;
+    this.state = 'death';
+    this.stateTimer = 0.45;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.velocityX = fromX > this.x ? -140 : 140;
+    this.velocityY = -230;
+    this.facing = fromX > this.x ? 1 : -1;
   }
 
   public hurt(fromX?: number): void {
@@ -202,14 +283,16 @@ export class Player extends Entity {
     } else if ((this.state === 'hurt' || this.state === 'death') && this.hurtImage) {
       const sx = this.currentFrame * this.FRAME_WIDTH;
       const s = this.state === 'death' ? 1.2 : 1.15;
-      ctx.globalAlpha = this.state === 'death' ? Math.max(0, this.stateTimer / 0.6) : 1;
       ctx.drawImage(
         this.hurtImage,
         sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
         -this.width * s / 2, this.y - this.height * (s - 1),
         this.width * s, this.height * s,
       );
-      ctx.globalAlpha = 1;
+    } else if (this.state === 'down' && this.downImage) {
+      this.drawGroundedSprite(ctx, this.downImage, this.DOWN_SOURCE, this.DOWN_DRAW_WIDTH, this.DOWN_DRAW_HEIGHT);
+    } else if (this.state === 'downhit' && this.downHitImage) {
+      this.drawGroundedSprite(ctx, this.downHitImage, this.DOWN_HIT_SOURCE, this.DOWN_HIT_DRAW_WIDTH, this.DOWN_HIT_DRAW_HEIGHT);
     } else if (this.idleImage) {
       ctx.drawImage(this.idleImage, -this.width / 2, this.y, this.width, this.height);
     } else {
@@ -239,5 +322,20 @@ export class Player extends Entity {
         ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
       }
     }
+  }
+
+  private drawGroundedSprite(
+    ctx: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    source: { x: number; y: number; w: number; h: number },
+    drawWidth: number,
+    drawHeight: number,
+  ): void {
+    ctx.drawImage(
+      image,
+      source.x, source.y, source.w, source.h,
+      -drawWidth / 2, this.y + this.height - drawHeight,
+      drawWidth, drawHeight,
+    );
   }
 }

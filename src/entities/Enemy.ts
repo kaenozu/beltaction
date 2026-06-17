@@ -88,6 +88,21 @@ export class Enemy extends Entity {
       this.updateAnimation(dt);
       return;
     }
+
+    if (player.isGameOver && !DebugFlags.allowPostGameOverAttacks) {
+      this.flankTargetX = null;
+      this.attackHit = false;
+      if (Math.abs(dx) < this.RETREAT_RANGE) {
+        this.state = 'walk';
+        this.velocityX = -this.facing * this.RETREAT_SPEED;
+      } else {
+        this.state = 'idle';
+        this.velocityX = 0;
+      }
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
     
     if (this.state === 'attack') {
       // Check hit on strike frame
@@ -96,11 +111,17 @@ export class Enemy extends Entity {
         const hurt = player.getHurtHitbox();
         this.attackHit = true;
         if (atk && rectsOverlap(atk, hurt)) {
-          player.health -= this.damage;
-          if (player.health <= 0) {
-            player.die(this.x);
+          if (player.canReceiveGroundHit || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
+            player.downHit(this.x, DebugFlags.allowPostGameOverAttacks);
+          } else if (!player.isDefeated) {
+            player.health -= this.damage;
+            if (player.health <= 0) {
+              player.die(this.x);
+            } else {
+              player.hurt(this.x);
+            }
           } else {
-            player.hurt(this.x);
+            return;
           }
           const left = Math.max(atk.x, hurt.x);
           const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
@@ -239,13 +260,11 @@ export class Enemy extends Entity {
     
     if (this.state === 'death' && this.hurtImage) {
       const sx = this.currentFrame * this.FRAME_WIDTH;
-      ctx.globalAlpha = Math.max(0, this.stateTimer / 0.5);
       ctx.drawImage(
         this.hurtImage,
         sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
         -this.width / 2, this.y, this.width, this.height,
       );
-      ctx.globalAlpha = 1;
       ctx.restore();
       return;
     }

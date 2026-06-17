@@ -193,6 +193,80 @@ Pose:
 
 ---
 
+## Maki Alternate Hurt: Head Hit Prompt
+
+Attach the Maki concept art, idle frame, and current hurt frame as references.
+
+```text
+Create a pixel-art alternate hurt reaction frame for the player character Maki for a side-scrolling arcade beat-em-up game.
+
+Use the attached Maki concept art, idle frame, and current hurt frame as references. The new hurt frame must exactly match the established Maki sprite style, proportions, outfit, color palette, line thickness, and pixel density.
+
+IMPORTANT: This is an alternate hurt pose, not a death pose and not a knockdown pose. Maki stays standing on the ground.
+
+Technical requirements:
+- Single full-body frame.
+- Final game frame size is 160x192 pixels.
+- Generate at 5x scale if possible: 800x960 pixels.
+- Solid bright green background (#00FF00).
+- Side view, facing right.
+- Feet stay on the same ground baseline as the idle frame.
+- Full body visible inside the frame.
+- Clean 16-bit arcade pixel art, crisp hard pixels, no blur, no anti-aliased mush.
+- No text, labels, borders, UI, hit sparks, blood, impact effects, or cartoon motion lines.
+
+Pose:
+- Maki is being struck downward on the head from above.
+- Her head is forced down sharply, chin tucked toward the chest.
+- Shoulders hunch upward defensively.
+- Upper back rounds forward.
+- One or both arms lift slightly toward the head as a reflexive guard.
+- Knees bend a little from the impact, but both feet remain planted.
+- Face shows pain: eyes squeezed shut, mouth open or clenched.
+- The silhouette should read clearly as "hit on the head / stunned downward."
+- Do not make her lean backward like the existing hurt frame.
+- Do not make her fall, kneel, or leave the ground.
+```
+
+---
+
+## Maki Alternate Hurt: Abdomen Hit Prompt
+
+Attach the Maki concept art, idle frame, and current hurt frame as references.
+
+```text
+Create a pixel-art alternate hurt reaction frame for the player character Maki for a side-scrolling arcade beat-em-up game.
+
+Use the attached Maki concept art, idle frame, and current hurt frame as references. The new hurt frame must exactly match the established Maki sprite style, proportions, outfit, color palette, line thickness, and pixel density.
+
+IMPORTANT: This is an alternate hurt pose, not a death pose and not a knockdown pose. Maki stays standing on the ground.
+
+Technical requirements:
+- Single full-body frame.
+- Final game frame size is 160x192 pixels.
+- Generate at 5x scale if possible: 800x960 pixels.
+- Solid bright green background (#00FF00).
+- Side view, facing right.
+- Feet stay on the same ground baseline as the idle frame.
+- Full body visible inside the frame.
+- Clean 16-bit arcade pixel art, crisp hard pixels, no blur, no anti-aliased mush.
+- No text, labels, borders, UI, hit sparks, blood, impact effects, or cartoon motion lines.
+
+Pose:
+- Maki is being struck hard in the abdomen.
+- Her torso folds forward around the stomach.
+- One arm crosses or clutches the abdomen.
+- The other arm hangs or flinches backward from the impact.
+- Head dips forward, hair swinging slightly forward.
+- Knees bend slightly, but both feet remain planted.
+- Face shows pain: eyes squeezed shut, mouth open in a gasp or grimace.
+- The silhouette should read clearly as "stomach hit / wind knocked out."
+- Do not make her lean backward like the existing hurt frame.
+- Do not make her fall, kneel, or leave the ground.
+```
+
+---
+
 ## Maki Death Frame Prompt
 
 Attach the Maki concept art AND the idle frame as references.
@@ -228,27 +302,60 @@ Pose:
 Attach the Maki concept art AND the idle frame as references.
 
 ```text
-Create a pixel-art down/knocked-out frame for the player character Maki for a side-scrolling arcade beat-em-up game.
+Create a pixel-art down/knocked-out frame for the player character Maki for a side-scrolling arcade beat-em-up game. IMPORTANT: Draw the character already lying horizontally on the ground. Do not draw a vertical pose for later rotation.
 
 Use the attached concept art AND the idle frame as the main visual references. The down frame must exactly match the idle/walk/attack frames in style, proportions, color palette, and line thickness.
 
 IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
 
-CRITICAL: This is a 4-frame strip, NOT a single image. Frame 1 contains the down pose; frames 2-4 are solid green background.
+CRITICAL: Generate this as a single down pose image. A 4-frame strip is not required for the current pipeline. Keep the full body visible so the game can crop the character from the transparent or green-backed image.
 
 Technical requirements:
-- 4 frames in a single horizontal row. Only frame 1 (leftmost) contains the down pose. Frames 2-4 are blank (solid green background).
-- Frame size: 800x960 pixels per frame (5x scale of 160x192).
-- Total image size: 3200x960 pixels.
-- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 2-4 must be 100% green with NO content.
-- Side view, facing right. Character is lying on the ground, horizontal.
-- Character aligned to the bottom of the frame (the ground plane at the bottom edge).
+- Single full-body down pose.
+- Use a solid bright green background (#00FF00) unless transparent background is explicitly requested.
+- No gradients, shadows, texture, checkerboard, or anti-aliased edges on the background.
+- Horizontal lying-down orientation — character is already on the ground, stretched across the frame width.
+- Character aligned to the bottom of the frame, on the ground plane.
+- Side view, facing right.
 - Same body proportions, outfit, and colors as the idle frame.
-- Clean pixel art at this 5x scale — each "pixel" should be a crisp 5x5 block, no sub-pixel details, no blur, no gradients, no anti-aliased mush.
+- Clean 16-bit arcade pixel art, crisp hard pixels, no blur, no anti-aliased mush.
 - No text, labels, borders, or UI.
 
 Pose:
-- Knocked down / lying face-down on the ground. Character is sprawled out horizontally, arms and legs limp, head on the ground. The body should fill the frame width and be positioned at the bottom edge of the frame (the ground). This is the "lying defeated" pose that appears after the death animation finishes.
+- Knocked down / lying on the ground. Character is sprawled out horizontally, arms and legs limp, head resting near the ground. The body should fill much of the frame width and stay positioned at the bottom edge of the frame.
+- Avoid a flat paper-thin result. Keep the torso, hips, head, hair, arms, and legs visibly thick and readable, with the same body volume as the idle sprite. The result should look like a full body lying on the ground, not a compressed horizontal smear.
+```
+
+---
+
+## Maki Down Hit Frame Prompt
+
+Attach the Maki concept art AND the idle frame as references.
+
+```text
+Create a pixel-art down-hit/ground-hit frame for the player character Maki for a side-scrolling arcade beat-em-up game. This is the pose shown when the player is attacked while already knocked down on the ground. IMPORTANT: Draw the character already lying horizontally on the ground. Do not draw a vertical pose for later rotation.
+
+Use the attached concept art AND the idle frame as the main visual references. The down hit frame must exactly match the down frame in style, proportions, color palette, and line thickness.
+
+CRITICAL: Generate this as a single down-hit pose image. A 4-frame strip is not required for the current pipeline. Keep the full body visible so the game can crop the character from the transparent or green-backed image.
+
+Technical requirements:
+- Single full-body down-hit pose.
+- Use a solid bright green background (#00FF00) unless transparent background is explicitly requested.
+- No gradients, shadows, texture, checkerboard, or anti-aliased edges on the background.
+- Horizontal lying-down orientation — same format as the Down frame.
+- Character aligned to the bottom of the frame, on the ground plane.
+- Side view, facing right.
+- Same clothing, colors, and style as the Down frame.
+- Clean 16-bit arcade pixel art, crisp hard pixels, no blur, no anti-aliased mush.
+- No text, labels, borders, UI, hit marks, impact effects, or cartoon lines.
+
+Pose:
+- Getting hit while already lying limp/unconscious on the ground. The body shows impact reaction — arms and legs jerk, head snaps back, body bends at the waist from the force of the blow.
+- Face shows strong pain and distress: eyes squeezed shut, eyebrows strained, mouth wide open as if screaming.
+- Make the open mouth readable even at pixel-art scale, with a dark mouth shape and a clear expression change from the normal down frame.
+- Still looks like the same knocked-down body, just reacting to a hit.
+- Avoid a flat paper-thin result. Keep the torso, hips, head, hair, arms, and legs visibly thick and readable, with the same body volume as the idle sprite. The result should look like a full body lying on the ground, not a compressed horizontal smear.
 ```
 
 ---
