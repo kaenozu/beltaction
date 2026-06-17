@@ -69,7 +69,8 @@ export class Enemy extends Entity {
         this.attackHit = true;
         player.health -= this.damage;
         player.hurt();
-        this.onHit?.(this.x + this.width / 2, this.y + this.height / 2);
+        const px = player.x, py = player.y, pw = player.width, ph = player.height;
+        this.onHit?.(this.facing > 0 ? px : px + pw, py + ph / 2);
       }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
