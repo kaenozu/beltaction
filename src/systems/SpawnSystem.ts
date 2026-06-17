@@ -14,7 +14,6 @@ export class SpawnSystem extends Entity {
   private enemy: Enemy | null = null;
   private _spriteImage: HTMLImageElement | null = null;
   private playerAttackHit: boolean = false;
-  private readonly ATTACK_RANGE = 60;
   private effects: HitEffect[] = [];
   
   get spriteImage(): HTMLImageElement | null { return this._spriteImage; }
@@ -54,25 +53,21 @@ export class SpawnSystem extends Entity {
     
     // Only hit on strike frame and once per attack
     if (this.playerAttackHit) return;
-    if (player.currentFrame !== 1) return;
     
-    // Attack hitbox: in front of player
-    const ax = player.facing > 0 ? player.x + player.width : player.x - this.ATTACK_RANGE;
-    const ay = player.y;
-    const aw = this.ATTACK_RANGE;
-    const ah = player.height;
+    const atk = player.getAttackHitbox();
+    if (!atk) return;
     
     const bx = this.enemy.x;
     const by = this.enemy.y;
     const bw = this.enemy.width;
     const bh = this.enemy.height;
     
-    if (rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)) {
+    if (rectsOverlap(atk.x, atk.y, atk.w, atk.h, bx, by, bw, bh)) {
       this.enemy.takeDamage(20);
       this.playerAttackHit = true;
       // Effect at center of overlap between attack box and enemy hitbox
-      const left = Math.max(ax, bx);
-      const right = Math.min(ax + aw, bx + bw);
+      const left = Math.max(atk.x, bx);
+      const right = Math.min(atk.x + atk.w, bx + bw);
       this.spawnHitEffect((left + right) / 2, by + bh / 2);
     }
   }

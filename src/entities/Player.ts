@@ -1,6 +1,7 @@
 import { Entity } from '../engine/Game';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
+import { HitboxConfig, MAKI_HITBOX } from '../systems/HitboxConfig';
 
 export class Player extends Entity {
   private inputState!: InputState;
@@ -28,6 +29,7 @@ export class Player extends Entity {
   private readonly ANIM_SPEED = 0.15;
   private prevAttack: boolean = false;
   private rapidCount: number = 0;
+  private hitboxConfig: HitboxConfig = MAKI_HITBOX;
   
   constructor(x: number, y: number, private name: string) {
     super(x, y);
@@ -125,6 +127,16 @@ export class Player extends Entity {
     }
   }
   
+  /** Current attack hitbox in world coords, or null if not on strike frame */
+  getAttackHitbox(): { x: number; y: number; w: number; h: number } | null {
+    if (this.state !== 'attack' || this.currentFrame !== 1) return null;
+    const hb = this.hitboxConfig.hitboxes.attack;
+    if (this.facing > 0) {
+      return { x: this.x + hb.x, y: this.y + hb.y, w: hb.w, h: hb.h };
+    }
+    return { x: this.x + this.width - hb.x - hb.w, y: this.y + hb.y, w: hb.w, h: hb.h };
+  }
+  
   private applyPhysics(dt: number): void {
     this.velocityY += this.GRAVITY * dt;
     this.x += this.velocityX * dt;
@@ -179,11 +191,12 @@ export class Player extends Entity {
       ctx.strokeStyle = '#0f0';
       ctx.lineWidth = 1;
       ctx.strokeRect(this.x, this.y, this.width, this.height);
-      // Attack hitbox
-      if (this.state === 'attack') {
-        const ax = this.facing > 0 ? this.x + this.width : this.x - 60;
+      // Attack hitbox (from config)
+      const atk = this.getAttackHitbox();
+      if (atk) {
         ctx.strokeStyle = '#f80';
-        ctx.strokeRect(ax, this.y, 60, this.height);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
       }
     }
   }

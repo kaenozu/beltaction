@@ -1,6 +1,7 @@
 import { Entity } from '../engine/Game';
 import { Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
+import { HitboxConfig, GRUNT_HITBOX } from '../systems/HitboxConfig';
 
 type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt';
 
@@ -30,6 +31,7 @@ export class Enemy extends Entity {
   public onHit: ((x: number, y: number) => void) | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
+  private hitboxConfig: HitboxConfig = GRUNT_HITBOX;
   
   constructor(x: number, y: number, private player: () => Player) {
     super(x, y);
@@ -71,10 +73,12 @@ export class Enemy extends Entity {
         player.health -= this.damage;
         player.hurt(this.x);
         // Effect at center of overlap between enemy attack and player
-        const atkX = this.facing > 0 ? this.x + this.width : this.x - 60;
-        const left = Math.max(atkX, player.x);
-        const right = Math.min(atkX + 60, player.x + player.width);
-        this.onHit?.((left + right) / 2, player.y + player.height / 2);
+        const atk = this.getAttackHitbox();
+        if (atk) {
+          const left = Math.max(atk.x, player.x);
+          const right = Math.min(atk.x + atk.w, player.x + player.width);
+          this.onHit?.((left + right) / 2, player.y + player.height / 2);
+        }
       }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
@@ -159,6 +163,16 @@ export class Enemy extends Entity {
     this.velocityX = this.facing * -80;
   }
   
+  /** Current attack hitbox in world coords, or null if not on strike frame */
+  getAttackHitbox(): { x: number; y: number; w: number; h: number } | null {
+    if (this.state !== 'attack' || this.currentFrame !== 1) return null;
+    const hb = this.hitboxConfig.hitboxes.attack;
+    if (this.facing > 0) {
+      return { x: this.x + hb.x, y: this.y + hb.y, w: hb.w, h: hb.h };
+    }
+    return { x: this.x + this.width - hb.x - hb.w, y: this.y + hb.y, w: hb.w, h: hb.h };
+  }
+  
   override render(ctx: CanvasRenderingContext2D): void {
     if (!this.spriteImage) {
       ctx.fillStyle = '#777';
@@ -207,11 +221,12 @@ export class Enemy extends Entity {
       ctx.strokeStyle = '#f00';
       ctx.lineWidth = 1;
       ctx.strokeRect(this.x, this.y, this.width, this.height);
-      // Attack hitbox
-      if (this.state === 'attack') {
-        const atkX = this.facing > 0 ? this.x + this.width : this.x - 60;
+      // Attack hitbox (from config)
+      const atk = this.getAttackHitbox();
+      if (atk) {
         ctx.strokeStyle = '#f80';
-        ctx.strokeRect(atkX, this.y, 60, this.height);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
       }
     }
   }

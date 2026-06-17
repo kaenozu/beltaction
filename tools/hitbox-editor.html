@@ -1,0 +1,282 @@
+<!--
+ * tools/hitbox-editor.html
+ * スプライトの各フレームにヒットボックスを設定するビジュアルエディタ
+ * JSON出力をゲームコードに取り込んで使用する
+ * 関連: SpriteConfig.ts（設定読み込み先）, Player.ts, Enemy.ts
+-->
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitbox Editor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+h1 { font-size: 18px; margin-bottom: 12px; color: #ffd700; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.toolbar label { font-size: 13px; color: #aaa; }
+.toolbar input[type="file"] { font-size: 13px; color: #eee; }
+.toolbar input[type="number"] { width: 60px; background: #16213e; border: 1px solid #333; color: #eee; padding: 4px 6px; border-radius: 4px; font-size: 13px; }
+.toolbar button { background: #0f3460; color: #eee; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.toolbar button:hover { background: #1a4a8a; }
+.toolbar button.primary { background: #e94560; }
+.toolbar button.primary:hover { background: #ff6b81; }
+.main { display: flex; gap: 20px; }
+.canvas-area { flex: 0 0 auto; }
+.canvas-area canvas { display: block; border: 1px solid #333; background: #111; image-rendering: pixelated; }
+.frame-nav { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+.frame-nav button { background: #16213e; border: 1px solid #333; color: #aaa; padding: 4px 10px; cursor: pointer; border-radius: 3px; font-size: 12px; }
+.frame-nav button.active { background: #e94560; color: #fff; border-color: #e94560; }
+.frame-nav button:hover { background: #1a4a8a; }
+.panel { flex: 1; min-width: 300px; }
+.panel h2 { font-size: 14px; margin-bottom: 8px; color: #ffd700; }
+.hitbox-group { background: #16213e; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+.hitbox-group h3 { font-size: 13px; margin-bottom: 6px; color: #ccc; }
+.hitbox-group .row { display: flex; gap: 10px; align-items: center; margin-bottom: 4px; }
+.hitbox-group .row label { font-size: 12px; color: #888; width: 16px; }
+.hitbox-group .row input[type="range"] { flex: 1; accent-color: #e94560; }
+.hitbox-group .row .val { font-size: 12px; color: #ffd700; width: 30px; text-align: right; }
+.color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.json-output { width: 100%; height: 200px; background: #111; border: 1px solid #333; color: #0f0; padding: 8px; font-family: monospace; font-size: 12px; border-radius: 4px; margin-top: 8px; }
+.legend { font-size: 12px; color: #888; margin-top: 8px; }
+.legend span { margin-right: 16px; }
+</style>
+</head>
+<body>
+
+<h1>⚔ Hitbox Editor</h1>
+
+<div class="toolbar">
+  <label>Sprite:</label>
+  <input type="file" id="spriteFile" accept="image/*">
+  <label>Frame W:</label>
+  <input type="number" id="frameW" value="160" min="16" max="512" step="16">
+  <label>Frame H:</label>
+  <input type="number" id="frameH" value="192" min="16" max="512" step="16">
+  <button id="loadBtn">Load</button>
+  <button id="exportBtn" class="primary">Export JSON</button>
+  <button id="clearBtn">Clear</button>
+</div>
+
+<div class="main">
+  <div class="canvas-area">
+    <canvas id="display" width="320" height="384"></canvas>
+    <div class="frame-nav" id="frameNav"></div>
+  </div>
+  <div class="panel">
+    <h2>Frame <span id="frameLabel">0</span></h2>
+    
+    <div class="hitbox-group">
+      <h3><span class="color-dot" style="background:#0f0"></span>Body (当たり判定)</h3>
+      <div class="row"><label>X</label><input type="range" id="bx" min="-80" max="240" value="0"><span class="val" id="bxv">0</span></div>
+      <div class="row"><label>Y</label><input type="range" id="by" min="-80" max="240" value="0"><span class="val" id="byv">0</span></div>
+      <div class="row"><label>W</label><input type="range" id="bw" min="1" max="320" value="160"><span class="val" id="bwv">160</span></div>
+      <div class="row"><label>H</label><input type="range" id="bh" min="1" max="320" value="192"><span class="val" id="bhv">192</span></div>
+    </div>
+
+    <div class="hitbox-group">
+      <h3><span class="color-dot" style="background:#f80"></span>Attack (攻撃判定)</h3>
+      <div class="row"><label>X</label><input type="range" id="ax" min="-80" max="240" value="160"><span class="val" id="axv">160</span></div>
+      <div class="row"><label>Y</label><input type="range" id="ay" min="-80" max="240" value="40"><span class="val" id="ayv">40</span></div>
+      <div class="row"><label>W</label><input type="range" id="aw" min="1" max="320" value="60"><span class="val" id="awv">60</span></div>
+      <div class="row"><label>H</label><input type="range" id="ah" min="1" max="320" value="80"><span class="val" id="ahv">80</span></div>
+    </div>
+
+    <div class="hitbox-group">
+      <h3><span class="color-dot" style="background:#0ff"></span>Hurt (被弾判定)</h3>
+      <div class="row"><label>X</label><input type="range" id="hx" min="-80" max="240" value="0"><span class="val" id="hxv">0</span></div>
+      <div class="row"><label>Y</label><input type="range" id="hy" min="-80" max="240" value="0"><span class="val" id="hyv">0</span></div>
+      <div class="row"><label>W</label><input type="range" id="hw" min="1" max="320" value="160"><span class="val" id="hwv">160</span></div>
+      <div class="row"><label>H</label><input type="range" id="hh" min="1" max="320" value="192"><span class="val" id="hhv">192</span></div>
+    </div>
+
+    <div class="legend">
+      <span><span class="color-dot" style="background:#0f0"></span>Body</span>
+      <span><span class="color-dot" style="background:#f80"></span>Attack</span>
+      <span><span class="color-dot" style="background:#0ff"></span>Hurt</span>
+    </div>
+
+    <textarea class="json-output" id="jsonOut" readonly></textarea>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('display');
+const ctx = canvas.getContext('2d');
+let img = null;
+let numFrames = 0;
+let currentFrame = 0;
+
+const sliders = {};
+
+function setupSlider(id, onChange) {
+  const el = document.getElementById(id);
+  const val = document.getElementById(id + 'v');
+  el.addEventListener('input', () => {
+    val.textContent = el.value;
+    if (onChange) onChange();
+    render();
+    updateJson();
+  });
+  sliders[id] = el;
+  return el;
+}
+
+setupSlider('bx'); setupSlider('by'); setupSlider('bw'); setupSlider('bh');
+setupSlider('ax'); setupSlider('ay'); setupSlider('aw'); setupSlider('ah');
+setupSlider('hx'); setupSlider('hy'); setupSlider('hw'); setupSlider('hh');
+
+function getHitbox(prefix) {
+  return {
+    x: parseInt(document.getElementById(prefix + 'x').value),
+    y: parseInt(document.getElementById(prefix + 'y').value),
+    w: parseInt(document.getElementById(prefix + 'w').value),
+    h: parseInt(document.getElementById(prefix + 'h').value),
+  };
+}
+
+function setHitbox(prefix, hb) {
+  document.getElementById(prefix + 'x').value = hb.x;
+  document.getElementById(prefix + 'x').dispatchEvent(new Event('input'));
+  // Don't re-render for each one; just set values
+}
+
+function render() {
+  const fw = parseInt(document.getElementById('frameW').value);
+  const fh = parseInt(document.getElementById('frameH').value);
+  canvas.width = fw * 2;
+  canvas.height = fh * 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background grid
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= canvas.width; x += 8) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+  for (let y = 0; y <= canvas.height; y += 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+
+  if (img) {
+    const sx = currentFrame * fw;
+    ctx.drawImage(img, sx, 0, fw, fh, 0, 0, fw * 2, fh * 2);
+  }
+
+  // Center crosshair
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(fw, 0); ctx.lineTo(fw, fh * 2);
+  ctx.moveTo(0, fh); ctx.lineTo(fw * 2, fh);
+  ctx.stroke();
+
+  function drawRect(hb, color, label) {
+    if (hb.w <= 0 || hb.h <= 0) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(hb.x * 2, hb.y * 2, hb.w * 2, hb.h * 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.15;
+    ctx.fillRect(hb.x * 2, hb.y * 2, hb.w * 2, hb.h * 2);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    ctx.font = '10px monospace';
+    ctx.fillText(label, hb.x * 2 + 2, hb.y * 2 + 10);
+  }
+
+  drawRect(getHitbox('b'), '#0f0', 'BODY');
+  drawRect(getHitbox('a'), '#f80', 'ATK');
+  drawRect(getHitbox('h'), '#0ff', 'HURT');
+}
+
+function updateJson() {
+  const fw = parseInt(document.getElementById('frameW').value);
+  const fh = parseInt(document.getElementById('frameH').value);
+  const data = {
+    frameWidth: fw,
+    frameHeight: fh,
+    frames: numFrames,
+    hitboxes: {
+      body: getHitbox('b'),
+      hurt: getHitbox('h'),
+      attack: []
+    }
+  };
+  // We save per-frame attack data; for now use current frame
+  // In a full version we'd store per-frame arrays
+  data.hitboxes.attack = getHitbox('a');
+  document.getElementById('jsonOut').value = JSON.stringify(data, null, 2);
+}
+
+function loadImage(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    img = new Image();
+    img.onload = () => {
+      const fw = parseInt(document.getElementById('frameW').value);
+      numFrames = Math.floor(img.width / fw);
+      buildFrameNav();
+      currentFrame = 0;
+      document.getElementById('frameLabel').textContent = '0';
+      render();
+      updateJson();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function buildFrameNav() {
+  const nav = document.getElementById('frameNav');
+  nav.innerHTML = '';
+  for (let i = 0; i < numFrames; i++) {
+    const btn = document.createElement('button');
+    btn.textContent = i;
+    btn.dataset.idx = i;
+    btn.addEventListener('click', () => {
+      currentFrame = i;
+      document.getElementById('frameLabel').textContent = i;
+      document.querySelectorAll('#frameNav button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+      updateJson();
+    });
+    if (i === 0) btn.classList.add('active');
+    nav.appendChild(btn);
+  }
+}
+
+document.getElementById('spriteFile').addEventListener('change', (e) => {
+  if (e.target.files[0]) loadImage(e.target.files[0]);
+});
+
+document.getElementById('loadBtn').addEventListener('click', () => {
+  render();
+  updateJson();
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const json = document.getElementById('jsonOut');
+  json.select();
+  navigator.clipboard.writeText(json.value).then(() => {
+    document.getElementById('exportBtn').textContent = 'Copied!';
+    setTimeout(() => { document.getElementById('exportBtn').textContent = 'Export JSON'; }, 1500);
+  });
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  img = null;
+  numFrames = 0;
+  currentFrame = 0;
+  document.getElementById('frameNav').innerHTML = '';
+  document.getElementById('frameLabel').textContent = '0';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('jsonOut').value = '';
+});
+
+render();
+updateJson();
+</script>
+</body>
+</html>
