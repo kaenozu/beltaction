@@ -1,8 +1,8 @@
 <!--
  * tools/hitbox-editor.html
  * スプライトの各フレームにヒットボックスを設定するビジュアルエディタ
- * JSON出力をゲームコードに取り込んで使用する
- * 関連: SpriteConfig.ts（設定読み込み先）, Player.ts, Enemy.ts
+ * 既存JSONの読み込み → スライダー調整 → JSON出力 のワークフロー
+ * 関連: HitboxConfig.ts（設定型）, Player.ts, Enemy.ts
 -->
 
 <!DOCTYPE html>
@@ -17,12 +17,14 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; pa
 h1 { font-size: 18px; margin-bottom: 12px; color: #ffd700; }
 .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .toolbar label { font-size: 13px; color: #aaa; }
-.toolbar input[type="file"] { font-size: 13px; color: #eee; }
+.toolbar input[type="file"] { font-size: 13px; }
 .toolbar input[type="number"] { width: 60px; background: #16213e; border: 1px solid #333; color: #eee; padding: 4px 6px; border-radius: 4px; font-size: 13px; }
 .toolbar button { background: #0f3460; color: #eee; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
 .toolbar button:hover { background: #1a4a8a; }
 .toolbar button.primary { background: #e94560; }
 .toolbar button.primary:hover { background: #ff6b81; }
+.toolbar button.green { background: #2d6a4f; }
+.toolbar button.green:hover { background: #40916c; }
 .main { display: flex; gap: 20px; }
 .canvas-area { flex: 0 0 auto; }
 .canvas-area canvas { display: block; border: 1px solid #333; background: #111; image-rendering: pixelated; }
@@ -30,33 +32,41 @@ h1 { font-size: 18px; margin-bottom: 12px; color: #ffd700; }
 .frame-nav button { background: #16213e; border: 1px solid #333; color: #aaa; padding: 4px 10px; cursor: pointer; border-radius: 3px; font-size: 12px; }
 .frame-nav button.active { background: #e94560; color: #fff; border-color: #e94560; }
 .frame-nav button:hover { background: #1a4a8a; }
-.panel { flex: 1; min-width: 300px; }
+.panel { flex: 1; min-width: 300px; max-width: 420px; }
 .panel h2 { font-size: 14px; margin-bottom: 8px; color: #ffd700; }
 .hitbox-group { background: #16213e; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
 .hitbox-group h3 { font-size: 13px; margin-bottom: 6px; color: #ccc; }
 .hitbox-group .row { display: flex; gap: 10px; align-items: center; margin-bottom: 4px; }
-.hitbox-group .row label { font-size: 12px; color: #888; width: 16px; }
+.hitbox-group .row label { font-size: 12px; color: #888; width: 16px; flex-shrink: 0; }
 .hitbox-group .row input[type="range"] { flex: 1; accent-color: #e94560; }
-.hitbox-group .row .val { font-size: 12px; color: #ffd700; width: 30px; text-align: right; }
+.hitbox-group .row .val { font-size: 12px; color: #ffd700; width: 30px; text-align: right; flex-shrink: 0; }
 .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-.json-output { width: 100%; height: 200px; background: #111; border: 1px solid #333; color: #0f0; padding: 8px; font-family: monospace; font-size: 12px; border-radius: 4px; margin-top: 8px; }
+.json-section { margin-top: 8px; }
+.json-section textarea { width: 100%; height: 140px; background: #111; border: 1px solid #333; color: #0f0; padding: 8px; font-family: monospace; font-size: 12px; border-radius: 4px; resize: vertical; }
+.json-bar { display: flex; gap: 6px; margin-bottom: 4px; align-items: center; }
+.json-bar button { background: #0f3460; color: #eee; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.json-bar button:hover { background: #1a4a8a; }
+.json-bar button.primary { background: #e94560; }
+.json-bar button.primary:hover { background: #ff6b81; }
 .legend { font-size: 12px; color: #888; margin-top: 8px; }
 .legend span { margin-right: 16px; }
 </style>
 </head>
 <body>
 
-<h1>⚔ Hitbox Editor</h1>
+<h1>Hitbox Editor</h1>
 
 <div class="toolbar">
   <label>Sprite:</label>
   <input type="file" id="spriteFile" accept="image/*">
-  <label>Frame W:</label>
+  <label>W:</label>
   <input type="number" id="frameW" value="160" min="16" max="512" step="16">
-  <label>Frame H:</label>
+  <label>H:</label>
   <input type="number" id="frameH" value="192" min="16" max="512" step="16">
-  <button id="loadBtn">Load</button>
-  <button id="exportBtn" class="primary">Export JSON</button>
+  <button id="loadSpriteBtn">Load</button>
+  <label style="margin-left:12px;">Config JSON:</label>
+  <input type="file" id="jsonFile" accept=".json,text/plain">
+  <button id="loadJsonBtn" class="green">Apply</button>
   <button id="clearBtn">Clear</button>
 </div>
 
@@ -67,7 +77,7 @@ h1 { font-size: 18px; margin-bottom: 12px; color: #ffd700; }
   </div>
   <div class="panel">
     <h2>Frame <span id="frameLabel">0</span></h2>
-    
+
     <div class="hitbox-group">
       <h3><span class="color-dot" style="background:#0f0"></span>Body (当たり判定)</h3>
       <div class="row"><label>X</label><input type="range" id="bx" min="-80" max="240" value="0"><span class="val" id="bxv">0</span></div>
@@ -80,7 +90,7 @@ h1 { font-size: 18px; margin-bottom: 12px; color: #ffd700; }
       <h3><span class="color-dot" style="background:#f80"></span>Attack (攻撃判定)</h3>
       <div class="row"><label>X</label><input type="range" id="ax" min="-80" max="240" value="160"><span class="val" id="axv">160</span></div>
       <div class="row"><label>Y</label><input type="range" id="ay" min="-80" max="240" value="40"><span class="val" id="ayv">40</span></div>
-      <div class="row"><label>W</label><input type="range" id="aw" min="1" max="320" value="60"><span class="val" id="awv">60</span></div>
+      <div class="row"><label>W</label><input type="range" id="aw" min="1" max="320" value="70"><span class="val" id="awv">70</span></div>
       <div class="row"><label>H</label><input type="range" id="ah" min="1" max="320" value="80"><span class="val" id="ahv">80</span></div>
     </div>
 
@@ -98,7 +108,14 @@ h1 { font-size: 18px; margin-bottom: 12px; color: #ffd700; }
       <span><span class="color-dot" style="background:#0ff"></span>Hurt</span>
     </div>
 
-    <textarea class="json-output" id="jsonOut" readonly></textarea>
+    <div class="json-section">
+      <div class="json-bar">
+        <button id="exportBtn" class="primary">Copy JSON</button>
+        <button id="applyBtn">Apply from below</button>
+        <span style="font-size:11px;color:#888;" id="status"></span>
+      </div>
+      <textarea id="jsonOut" spellcheck="false"></textarea>
+    </div>
   </div>
 </div>
 
@@ -109,38 +126,46 @@ let img = null;
 let numFrames = 0;
 let currentFrame = 0;
 
-const sliders = {};
-
-function setupSlider(id, onChange) {
+function setupSlider(id) {
   const el = document.getElementById(id);
   const val = document.getElementById(id + 'v');
   el.addEventListener('input', () => {
     val.textContent = el.value;
-    if (onChange) onChange();
     render();
     updateJson();
   });
-  sliders[id] = el;
-  return el;
 }
 
-setupSlider('bx'); setupSlider('by'); setupSlider('bw'); setupSlider('bh');
-setupSlider('ax'); setupSlider('ay'); setupSlider('aw'); setupSlider('ah');
-setupSlider('hx'); setupSlider('hy'); setupSlider('hw'); setupSlider('hh');
+['bx','by','bw','bh','ax','ay','aw','ah','hx','hy','hw','hh'].forEach(setupSlider);
 
-function getHitbox(prefix) {
+function setSlider(id, v) {
+  const el = document.getElementById(id);
+  el.value = v;
+  document.getElementById(id + 'v').textContent = v;
+}
+
+function getHitbox(p) {
   return {
-    x: parseInt(document.getElementById(prefix + 'x').value),
-    y: parseInt(document.getElementById(prefix + 'y').value),
-    w: parseInt(document.getElementById(prefix + 'w').value),
-    h: parseInt(document.getElementById(prefix + 'h').value),
+    x: parseInt(document.getElementById(p + 'x').value),
+    y: parseInt(document.getElementById(p + 'y').value),
+    w: parseInt(document.getElementById(p + 'w').value),
+    h: parseInt(document.getElementById(p + 'h').value),
   };
 }
 
-function setHitbox(prefix, hb) {
-  document.getElementById(prefix + 'x').value = hb.x;
-  document.getElementById(prefix + 'x').dispatchEvent(new Event('input'));
-  // Don't re-render for each one; just set values
+function setHitbox(p, hb) {
+  if (!hb) return;
+  setSlider(p + 'x', hb.x);
+  setSlider(p + 'y', hb.y);
+  setSlider(p + 'w', hb.w);
+  setSlider(p + 'h', hb.h);
+}
+
+function status(msg, ok) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.color = ok ? '#0f0' : '#f80';
+  setTimeout(() => el.textContent = '', 3000);
 }
 
 function render() {
@@ -148,22 +173,23 @@ function render() {
   const fh = parseInt(document.getElementById('frameH').value);
   canvas.width = fw * 2;
   canvas.height = fh * 2;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Background grid
   ctx.fillStyle = '#222';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid
   ctx.strokeStyle = '#333';
   ctx.lineWidth = 0.5;
   for (let x = 0; x <= canvas.width; x += 8) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
   for (let y = 0; y <= canvas.height; y += 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
 
+  // Sprite frame
   if (img) {
     const sx = currentFrame * fw;
     ctx.drawImage(img, sx, 0, fw, fh, 0, 0, fw * 2, fh * 2);
   }
 
-  // Center crosshair
+  // Crosshair
   ctx.strokeStyle = '#555';
   ctx.lineWidth = 0.5;
   ctx.beginPath();
@@ -172,14 +198,15 @@ function render() {
   ctx.stroke();
 
   function drawRect(hb, color, label) {
-    if (hb.w <= 0 || hb.h <= 0) return;
+    if (!hb || hb.w <= 0 || hb.h <= 0) return;
+    ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.strokeRect(hb.x * 2, hb.y * 2, hb.w * 2, hb.h * 2);
     ctx.fillStyle = color;
-    ctx.globalAlpha = 0.15;
+    ctx.globalAlpha = 0.12;
     ctx.fillRect(hb.x * 2, hb.y * 2, hb.w * 2, hb.h * 2);
-    ctx.globalAlpha = 1;
+    ctx.restore();
     ctx.fillStyle = color;
     ctx.font = '10px monospace';
     ctx.fillText(label, hb.x * 2 + 2, hb.y * 2 + 10);
@@ -190,23 +217,40 @@ function render() {
   drawRect(getHitbox('h'), '#0ff', 'HURT');
 }
 
-function updateJson() {
+function buildConfig() {
   const fw = parseInt(document.getElementById('frameW').value);
   const fh = parseInt(document.getElementById('frameH').value);
-  const data = {
+  return {
     frameWidth: fw,
     frameHeight: fh,
     frames: numFrames,
     hitboxes: {
       body: getHitbox('b'),
       hurt: getHitbox('h'),
-      attack: []
-    }
+      attack: getHitbox('a'),
+    },
   };
-  // We save per-frame attack data; for now use current frame
-  // In a full version we'd store per-frame arrays
-  data.hitboxes.attack = getHitbox('a');
-  document.getElementById('jsonOut').value = JSON.stringify(data, null, 2);
+}
+
+function applyConfig(cfg) {
+  if (cfg.frameWidth) document.getElementById('frameW').value = cfg.frameWidth;
+  if (cfg.frameHeight) document.getElementById('frameH').value = cfg.frameHeight;
+  if (cfg.hitboxes) {
+    setHitbox('b', cfg.hitboxes.body);
+    setHitbox('h', cfg.hitboxes.hurt);
+    setHitbox('a', cfg.hitboxes.attack);
+  }
+  if (img) {
+    const fw = parseInt(document.getElementById('frameW').value);
+    numFrames = Math.floor(img.width / fw);
+    buildFrameNav();
+  }
+  render();
+  updateJson();
+}
+
+function updateJson() {
+  document.getElementById('jsonOut').value = JSON.stringify(buildConfig(), null, 2);
 }
 
 function loadImage(file) {
@@ -215,7 +259,7 @@ function loadImage(file) {
     img = new Image();
     img.onload = () => {
       const fw = parseInt(document.getElementById('frameW').value);
-      numFrames = Math.floor(img.width / fw);
+      numFrames = Math.max(1, Math.floor(img.width / fw));
       buildFrameNav();
       currentFrame = 0;
       document.getElementById('frameLabel').textContent = '0';
@@ -227,33 +271,56 @@ function loadImage(file) {
   reader.readAsDataURL(file);
 }
 
+function loadJson(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const cfg = JSON.parse(e.target.result);
+      applyConfig(cfg);
+      status('Config loaded', true);
+    } catch (err) {
+      status('Invalid JSON: ' + err.message, false);
+    }
+  };
+  reader.readAsText(file);
+}
+
 function buildFrameNav() {
   const nav = document.getElementById('frameNav');
   nav.innerHTML = '';
   for (let i = 0; i < numFrames; i++) {
     const btn = document.createElement('button');
     btn.textContent = i;
-    btn.dataset.idx = i;
     btn.addEventListener('click', () => {
       currentFrame = i;
       document.getElementById('frameLabel').textContent = i;
-      document.querySelectorAll('#frameNav button').forEach(b => b.classList.remove('active'));
+      nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       render();
-      updateJson();
     });
-    if (i === 0) btn.classList.add('active');
+    if (i === currentFrame) btn.classList.add('active');
     nav.appendChild(btn);
   }
 }
+
+// --- Events ---
 
 document.getElementById('spriteFile').addEventListener('change', (e) => {
   if (e.target.files[0]) loadImage(e.target.files[0]);
 });
 
-document.getElementById('loadBtn').addEventListener('click', () => {
+document.getElementById('loadSpriteBtn').addEventListener('click', () => {
   render();
   updateJson();
+});
+
+document.getElementById('jsonFile').addEventListener('change', (e) => {
+  if (e.target.files[0]) loadJson(e.target.files[0]);
+});
+
+document.getElementById('loadJsonBtn').addEventListener('click', () => {
+  const file = document.getElementById('jsonFile').files[0];
+  if (file) loadJson(file);
 });
 
 document.getElementById('exportBtn').addEventListener('click', () => {
@@ -261,8 +328,18 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   json.select();
   navigator.clipboard.writeText(json.value).then(() => {
     document.getElementById('exportBtn').textContent = 'Copied!';
-    setTimeout(() => { document.getElementById('exportBtn').textContent = 'Export JSON'; }, 1500);
+    setTimeout(() => { document.getElementById('exportBtn').textContent = 'Copy JSON'; }, 1500);
   });
+});
+
+document.getElementById('applyBtn').addEventListener('click', () => {
+  try {
+    const cfg = JSON.parse(document.getElementById('jsonOut').value);
+    applyConfig(cfg);
+    status('Applied', true);
+  } catch (err) {
+    status('Invalid JSON: ' + err.message, false);
+  }
 });
 
 document.getElementById('clearBtn').addEventListener('click', () => {
@@ -271,8 +348,8 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   currentFrame = 0;
   document.getElementById('frameNav').innerHTML = '';
   document.getElementById('frameLabel').textContent = '0';
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   document.getElementById('jsonOut').value = '';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 });
 
 render();
