@@ -3,6 +3,28 @@ import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 
+export type HitReactionType = 'light' | 'guardHead';
+
+const HURT_FRAME_BY_REACTION: Record<HitReactionType, number> = {
+  light: 0,
+  guardHead: 1,
+};
+
+const HURT_STUN_BY_REACTION: Record<HitReactionType, number> = {
+  light: 0.22,
+  guardHead: 0.48,
+};
+
+const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
+  light: 95,
+  guardHead: 220,
+};
+
+const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
+  light: 1.04,
+  guardHead: 1.16,
+};
+
 export class Player extends Entity {
   private inputState!: InputState;
   public health: number = 100;
@@ -36,18 +58,18 @@ export class Player extends Entity {
   currentFrame: number = 0;
   private animTimer: number = 0;
   private readonly WALK_FRAME_COUNT = 4;
-  private readonly HURT_FRAME_COUNT = 3;
+  private readonly HURT_FRAME_COUNT = 2;
   private readonly ANIM_SPEED = 0.15;
   private prevAttack: boolean = false;
   private rapidCount: number = 0;
-  private nextHurtFrame: number = 0;
+  private hurtDrawScale: number = 1.1;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
-  private readonly DOWN_SOURCE = { x: 33, y: 622, w: 1542, h: 302 };
-  private readonly DOWN_HIT_SOURCE = { x: 32, y: 275, w: 1706, h: 489 };
+  private readonly DOWN_SOURCE = { x: 21, y: 89, w: 241, h: 62 };
+  private readonly DOWN_HIT_SOURCE = { x: 24, y: 72, w: 239, h: 78 };
   private readonly DOWN_DRAW_WIDTH = 190;
   private readonly DOWN_HIT_DRAW_WIDTH = 190;
-  private readonly DOWN_DRAW_HEIGHT = 52;
-  private readonly DOWN_HIT_DRAW_HEIGHT = 56;
+  private readonly DOWN_DRAW_HEIGHT = 50;
+  private readonly DOWN_HIT_DRAW_HEIGHT = 62;
   get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
   get isGameOver(): boolean { return this.gameOverAnnounced; }
   get canReceiveGroundHit(): boolean {
@@ -218,15 +240,16 @@ export class Player extends Entity {
     this.facing = fromX > this.x ? 1 : -1;
   }
 
-  public hurt(fromX?: number): void {
+  public hurt(fromX?: number, reaction: HitReactionType = 'light'): void {
     this.state = 'hurt';
-    this.stateTimer = 0.4;
+    this.stateTimer = HURT_STUN_BY_REACTION[reaction];
     this.animTimer = 0;
-    this.currentFrame = this.nextHurtFrame;
-    this.nextHurtFrame = (this.nextHurtFrame + 1) % this.HURT_FRAME_COUNT;
+    this.currentFrame = HURT_FRAME_BY_REACTION[reaction] % this.HURT_FRAME_COUNT;
+    this.hurtDrawScale = HURT_DRAW_SCALE_BY_REACTION[reaction];
     if (fromX !== undefined) {
       this.facing = fromX > this.x ? 1 : -1;
-      this.velocityX = fromX > this.x ? -200 : 200;
+      const knockback = HURT_KNOCKBACK_BY_REACTION[reaction];
+      this.velocityX = fromX > this.x ? -knockback : knockback;
     } else {
       this.velocityX = 0;
     }
@@ -263,6 +286,8 @@ export class Player extends Entity {
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
+    this.drawShadow(ctx);
+
     ctx.save();
     ctx.translate(this.x + this.width / 2, 0);
     ctx.scale(this.facing, 1);
@@ -287,7 +312,7 @@ export class Player extends Entity {
       ctx.drawImage(this.jumpImage, -this.width / 2, this.y, this.width, this.height);
     } else if ((this.state === 'hurt' || this.state === 'death') && this.hurtImage) {
       const sx = this.currentFrame * this.FRAME_WIDTH;
-      const s = this.state === 'death' ? 1.2 : 1.15;
+      const s = this.state === 'death' ? 1.2 : this.hurtDrawScale;
       ctx.drawImage(
         this.hurtImage,
         sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
@@ -342,5 +367,20 @@ export class Player extends Entity {
       -drawWidth / 2, this.y + this.height - drawHeight,
       drawWidth, drawHeight,
     );
+  }
+
+  private drawShadow(ctx: CanvasRenderingContext2D): void {
+    const groundY = this.y + this.height - 8;
+    const isDown = this.state === 'down' || this.state === 'downhit';
+    const shadowW = isDown ? 158 : 104;
+    const shadowH = isDown ? 12 : 14;
+    const alpha = this.state === 'jump' ? 0.08 : 0.16;
+
+    ctx.save();
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.width / 2, groundY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 }

@@ -4,23 +4,28 @@
 
 Make the prototype feel good as a one-screen beat-em-up first, then expand it into a stage-based game.
 
-The current focus is combat feel: player hit reactions, enemy participation, knockdown states, and clear visual feedback.
+The current focus is combat feel: player hit reactions, enemy participation, knockdown states, sprite consistency, and clear visual feedback.
 
 ## 1. Finish Damage and Down States
 
 Tighten the full damage flow so it feels intentional.
 
-- Normal hurt reaction
-- Death reaction
-- Down state
-- Down-hit reaction when attacked on the ground
-- Game over state
-- Enemy behavior after the player is down
+Status: mostly implemented for the player.
+
+- Done: normal hurt reaction with multiple variants
+- Done: death reaction
+- Done: down state
+- Done: down-hit reaction when attacked on the ground
+- Done: game over state
+- Done: optional `POST-HIT` mode where enemies can keep attacking after game over
+- Done: repeated post-game down hits can replay the death knockback
+- Done: player shadow / grounding pass
+- Remaining: final visual polish for down and down-hit sprites after the latest regenerated assets are judged in-game
 
 Open questions:
 
-- Should enemies keep attacking the downed player, back off, or stop after game over?
-- Should there be a short invulnerability window after down-hit?
+- Should `POST-HIT` remain a debug-only mode or become an unlockable/setting later?
+- Should down-hit have a short cooldown so repeated hits read more clearly?
 - Should the player ever stand back up, or is down currently only for death?
 
 ## 2. Improve Enemy Attack Participation
@@ -65,6 +70,7 @@ Enemies need the same kind of finishing readability as the player.
 - Enemy down/grounded sprite
 - Decide whether defeated enemies disappear or remain briefly on the ground
 - Prevent defeated enemies from affecting collision and crowd movement
+- Add enemy shadow tuning if grounded/down sprites are added
 
 Recommended next implementation:
 
@@ -82,14 +88,35 @@ Keep the game readable while still supporting development.
 - Restart shortcut
 - Debug hitbox toggle display
 - Spawn shortcut display
+- `POST-HIT` toggle display
 
 Potential shortcut set:
 
 - `E`: spawn enemy
-- `H`: toggle hitboxes
+- `B`: toggle hitboxes
+- `G`: toggle post-game hits
 - `R`: restart
 
-## 6. Build Stage Progression
+## 6. Improve Defeat and Damage Presentation
+
+Raise the quality of the damage/defeat-focused experience while keeping it implemented as clear game systems.
+
+- Route hurt animations by hit type instead of only cycling frames
+- Add strong-hit reactions separate from light-hit reactions
+- Tune down-hit timing, hitstop, and recovery so repeated hits read clearly
+- Keep `POST-HIT` as an explicit optional mode
+- Add a small damage/defeat test mode for checking reactions quickly
+- Add camera shake tiers for strong hit, down-hit, and death replay
+- Add sound hooks for light hurt, strong hurt, down-hit, and game over
+- Keep presentation options controllable so intense defeat follow-up can be toggled
+
+Recommended next implementation:
+
+- Add a `DamageType` or `HitReactionType` enum.
+- Let enemy attacks choose a reaction type.
+- Map each reaction type to a specific player hurt/down animation.
+
+## 7. Build Stage Progression
 
 After one-screen combat feels good, move toward a simple Final Fight style stage loop.
 
@@ -106,15 +133,18 @@ First milestone:
 - Two enemy waves
 - Simple clear message at the end
 
-## 7. Organize Sprite Assets and Generation Flow
+## 8. Organize Sprite Assets and Generation Flow
 
 Generated sprites are starting to accumulate, so the asset pipeline should become explicit.
 
-- Keep source/generated images under `assets/`
-- Keep runtime game assets under `public/assets/`
-- Document which source image produced each runtime asset
-- Keep prompt blocks in `SPRITE_PROMPTS.md`
-- Keep conversion commands near the relevant prompt or in a small asset notes file
+Status: partially implemented.
+
+- Done: keep source/generated images under `assets/`
+- Done: keep runtime game assets under `public/assets/`
+- Done: keep prompt blocks in `SPRITE_PROMPTS.md`
+- Done: added `tools/normalize_maki_sprite.py` for Maki sprite normalization
+- Remaining: document which source image produced each runtime asset
+- Remaining: add conversion examples near each prompt or in a small asset notes file
 
 Recommended convention:
 
@@ -128,6 +158,13 @@ Implement enemy death/down presentation next.
 
 Reason:
 
-- Player down/down-hit is already in progress.
+- Player down/down-hit is now mostly implemented.
 - Applying the same idea to enemies will make attacks feel more consequential.
 - It creates a natural foundation for cleanup, waves, and stage progression.
+
+Concrete next slice:
+
+- Generate or choose a Grunt down sprite.
+- Add `downImage` support to `Enemy`.
+- Change enemy death flow from `death -> inactive` to `death -> down -> cleanup`.
+- Keep defeated enemies from blocking movement or being pushed.

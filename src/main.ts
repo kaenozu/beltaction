@@ -105,7 +105,8 @@ game.start();
 
 // Debug
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'h') player.hurt();
+  if (e.key === 'h' || e.key === '1') player.hurt(undefined, 'light');
+  if (e.key === '2') player.hurt(undefined, 'guardHead');
   if (e.key === 'b') DebugFlags.showHitboxes = !DebugFlags.showHitboxes;
   if (e.key === 'g') DebugFlags.allowPostGameOverAttacks = !DebugFlags.allowPostGameOverAttacks;
   if (e.key === 'e') spawner.spawnEnemy();

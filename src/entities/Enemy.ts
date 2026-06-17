@@ -1,5 +1,5 @@
 import { Entity } from '../engine/Game';
-import { Player } from './Player';
+import { HitReactionType, Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 
@@ -27,6 +27,8 @@ export class Enemy extends Entity {
   private attackCooldown: number = 0;
   private behaviorTimer: number = 0.5;
   private attackHit: boolean = false;
+  private attackPatternIndex: number = 0;
+  private currentAttackReaction: HitReactionType = 'light';
   private flankTargetX: number | null = null;
   private readonly BEHAVIOR_WALK_DURATION = 1.5;
   private readonly BEHAVIOR_IDLE_DURATION = 0.8;
@@ -118,7 +120,7 @@ export class Enemy extends Entity {
             if (player.health <= 0) {
               player.die(this.x);
             } else {
-              player.hurt(this.x);
+              player.hurt(this.x, this.currentAttackReaction);
             }
           } else {
             return;
@@ -158,6 +160,7 @@ export class Enemy extends Entity {
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
       this.attackHit = false;
+      this.currentAttackReaction = this.nextAttackReaction();
     } else if (this.attackCooldown > 0 && dist < this.RETREAT_RANGE) {
       this.state = 'walk';
       this.velocityX = -this.facing * this.RETREAT_SPEED;
@@ -192,6 +195,13 @@ export class Enemy extends Entity {
 
   setTargetX(targetX: number): void {
     this.targetX = targetX;
+  }
+
+  private nextAttackReaction(): HitReactionType {
+    const pattern: HitReactionType[] = ['light', 'light', 'guardHead'];
+    const reaction = pattern[this.attackPatternIndex % pattern.length];
+    this.attackPatternIndex++;
+    return reaction;
   }
   
   private applyPhysics(dt: number): void {
@@ -244,6 +254,8 @@ export class Enemy extends Entity {
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
+    this.drawShadow(ctx);
+
     if (!this.spriteImage) {
       ctx.fillStyle = '#777';
       ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -327,5 +339,16 @@ export class Enemy extends Entity {
         ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
       }
     }
+  }
+
+  private drawShadow(ctx: CanvasRenderingContext2D): void {
+    const groundY = this.y + this.height - 8;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.width / 2, groundY, 48, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 }
