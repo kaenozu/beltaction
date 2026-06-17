@@ -115,10 +115,13 @@ export class Player extends Entity {
     }
   }
   
-  public hurt(): void {
+  public hurt(fromX?: number): void {
     if (this.state === 'hurt') return; // Invincible during hurt
     this.state = 'hurt';
     this.stateTimer = 0.15;
+    if (fromX !== undefined) {
+      this.facing = fromX > this.x ? 1 : -1;
+    }
   }
   
   private applyPhysics(dt: number): void {

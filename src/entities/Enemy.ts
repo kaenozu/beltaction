@@ -68,7 +68,7 @@ export class Enemy extends Entity {
       if (this.currentFrame === 1 && !this.attackHit) {
         this.attackHit = true;
         player.health -= this.damage;
-        player.hurt();
+        player.hurt(this.x);
         const px = player.x, py = player.y, pw = player.width, ph = player.height;
         this.onHit?.(this.facing > 0 ? px : px + pw, py + ph / 2);
       }
@@ -87,18 +87,24 @@ export class Enemy extends Entity {
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
       this.attackHit = false;
+    } else if (dist < this.STOP_RANGE) {
+      // Close enough — stop and face player
+      this.velocityX = 0;
+      if (this.state !== 'attack' && this.state !== 'hurt') {
+        this.state = 'idle';
+      }
     } else if (this.behaviorTimer <= 0) {
-      // Toggle behavior: walk → idle → walk
       if (this.state === 'walk') {
         this.state = 'idle';
         this.velocityX = 0;
         this.behaviorTimer = this.BEHAVIOR_IDLE_DURATION + Math.random() * 0.5;
       } else {
         this.state = 'walk';
-        this.velocityX = this.facing * this.MOVE_SPEED;
         this.behaviorTimer = this.BEHAVIOR_WALK_DURATION + Math.random() * 1.0;
       }
-    } else if (this.state === 'walk') {
+    }
+    
+    if (this.state === 'walk') {
       this.velocityX = this.facing * this.MOVE_SPEED;
     }
     
