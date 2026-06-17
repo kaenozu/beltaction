@@ -36,9 +36,11 @@ export class Player extends Entity {
   currentFrame: number = 0;
   private animTimer: number = 0;
   private readonly WALK_FRAME_COUNT = 4;
+  private readonly HURT_FRAME_COUNT = 3;
   private readonly ANIM_SPEED = 0.15;
   private prevAttack: boolean = false;
   private rapidCount: number = 0;
+  private nextHurtFrame: number = 0;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
   private readonly DOWN_SOURCE = { x: 33, y: 622, w: 1542, h: 302 };
   private readonly DOWN_HIT_SOURCE = { x: 32, y: 275, w: 1706, h: 489 };
@@ -85,6 +87,8 @@ export class Player extends Entity {
       const frameDuration = this.stateTimer / 2;
       this.currentFrame = this.animTimer >= frameDuration ? 1 : 0;
       this.animTimer += dt;
+    } else if (this.state === 'hurt') {
+      this.animTimer = 0;
     } else {
       this.currentFrame = 0;
       this.animTimer = 0;
@@ -218,7 +222,8 @@ export class Player extends Entity {
     this.state = 'hurt';
     this.stateTimer = 0.4;
     this.animTimer = 0;
-    this.currentFrame = 0;
+    this.currentFrame = this.nextHurtFrame;
+    this.nextHurtFrame = (this.nextHurtFrame + 1) % this.HURT_FRAME_COUNT;
     if (fromX !== undefined) {
       this.facing = fromX > this.x ? 1 : -1;
       this.velocityX = fromX > this.x ? -200 : 200;
