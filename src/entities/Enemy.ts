@@ -10,8 +10,8 @@ export class Enemy extends Entity {
   private velocityY: number = 0;
   private readonly GRAVITY = 800;
   private readonly MOVE_SPEED = 60;
-  private readonly STOP_RANGE = 80;
-  private readonly ATTACK_RANGE = 130;
+  private readonly STOP_RANGE = 90;
+  private readonly ATTACK_RANGE = 70;
   private readonly ATTACK_COOLDOWN = 1.5;
   private state: EnemyState = 'walk';
   private stateTimer: number = 0;
@@ -69,13 +69,10 @@ export class Enemy extends Entity {
         this.attackHit = true;
         player.health -= this.damage;
         player.hurt(this.x);
-        // Hit at the center of the overlap between enemy attack and player
+        // Effect at midpoint between attack box origin and contact edge
         const atkX = this.facing > 0 ? this.x + this.width : this.x - 60;
-        const atkW = 60;
-        const left = Math.max(atkX, player.x);
-        const right = Math.min(atkX + atkW, player.x + player.width);
-        const py = player.y, ph = player.height;
-        this.onHit?.((left + right) / 2, py + ph / 2);
+        const contactX = Math.max(atkX, player.x);
+        this.onHit?.((atkX + contactX) / 2, player.y + player.height / 2);
       }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
@@ -93,12 +90,18 @@ export class Enemy extends Entity {
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
       this.attackHit = false;
-    } else if (dist < this.STOP_RANGE) {
-      // Too close — stop
+    } else if (dist < this.ATTACK_RANGE) {
+      // Within attack range but on cooldown — wait
       this.velocityX = 0;
       if (this.state !== 'attack' && this.state !== 'hurt') {
         this.state = 'idle';
       }
+    } else if (dist < this.STOP_RANGE) {
+      // Creep forward to enter attack range
+      if (this.state !== 'attack' && this.state !== 'hurt') {
+        this.state = 'walk';
+      }
+      this.velocityX = this.facing * this.MOVE_SPEED * 0.5;
     } else {
       if (this.behaviorTimer <= 0) {
         if (this.state === 'walk') {
