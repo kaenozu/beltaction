@@ -10,8 +10,8 @@ export class Enemy extends Entity {
   private velocityY: number = 0;
   private readonly GRAVITY = 800;
   private readonly MOVE_SPEED = 60;
-  private readonly STOP_RANGE = 120;
-  private readonly ATTACK_RANGE = 60;
+  private readonly STOP_RANGE = 80;
+  private readonly ATTACK_RANGE = 130;
   private readonly ATTACK_COOLDOWN = 1.5;
   private state: EnemyState = 'walk';
   private stateTimer: number = 0;
@@ -69,8 +69,13 @@ export class Enemy extends Entity {
         this.attackHit = true;
         player.health -= this.damage;
         player.hurt(this.x);
-        const px = player.x, py = player.y, pw = player.width, ph = player.height;
-        this.onHit?.(this.facing > 0 ? px : px + pw, py + ph / 2);
+        // Hit at the center of the overlap between enemy attack and player
+        const atkX = this.facing > 0 ? this.x + this.width : this.x - 60;
+        const atkW = 60;
+        const left = Math.max(atkX, player.x);
+        const right = Math.min(atkX + atkW, player.x + player.width);
+        const py = player.y, ph = player.height;
+        this.onHit?.((left + right) / 2, py + ph / 2);
       }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
@@ -79,6 +84,7 @@ export class Enemy extends Entity {
     
     const dist = Math.abs(dx);
     
+    // Attack if within range and cooldown ready
     if (dist < this.ATTACK_RANGE && this.attackCooldown <= 0) {
       this.state = 'attack';
       this.stateTimer = 0.4;
@@ -88,24 +94,25 @@ export class Enemy extends Entity {
       this.velocityX = 0;
       this.attackHit = false;
     } else if (dist < this.STOP_RANGE) {
-      // Close enough — stop and face player
+      // Too close — stop
       this.velocityX = 0;
       if (this.state !== 'attack' && this.state !== 'hurt') {
         this.state = 'idle';
       }
-    } else if (this.behaviorTimer <= 0) {
-      if (this.state === 'walk') {
-        this.state = 'idle';
-        this.velocityX = 0;
-        this.behaviorTimer = this.BEHAVIOR_IDLE_DURATION + Math.random() * 0.5;
-      } else {
-        this.state = 'walk';
-        this.behaviorTimer = this.BEHAVIOR_WALK_DURATION + Math.random() * 1.0;
+    } else {
+      if (this.behaviorTimer <= 0) {
+        if (this.state === 'walk') {
+          this.state = 'idle';
+          this.velocityX = 0;
+          this.behaviorTimer = this.BEHAVIOR_IDLE_DURATION + Math.random() * 0.5;
+        } else {
+          this.state = 'walk';
+          this.behaviorTimer = this.BEHAVIOR_WALK_DURATION + Math.random() * 1.0;
+        }
       }
-    }
-    
-    if (this.state === 'walk') {
-      this.velocityX = this.facing * this.MOVE_SPEED;
+      if (this.state === 'walk') {
+        this.velocityX = this.facing * this.MOVE_SPEED;
+      }
     }
     
     this.applyPhysics(dt);

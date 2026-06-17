@@ -70,9 +70,12 @@ export class SpawnSystem extends Entity {
     if (rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)) {
       this.enemy.takeDamage(20);
       this.playerAttackHit = true;
-      // Hit at enemy's leading edge (where punch connects)
-      const hitX = player.facing > 0 ? this.enemy.x : this.enemy.x + this.enemy.width;
-      this.spawnHitEffect(hitX, by + bh / 2);
+      // Hit at the center of the overlap region between punch and enemy
+      const left = Math.max(ax, bx);
+      const right = Math.min(ax + aw, bx + bw);
+      const top = Math.max(ay, by);
+      const bottom = Math.min(ay + ah, by + bh);
+      this.spawnHitEffect((left + right) / 2, (top + bottom) / 2);
     }
   }
   
