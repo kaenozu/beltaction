@@ -1,5 +1,6 @@
 import { Entity } from '../engine/Game';
 import { Player } from './Player';
+import { DebugFlags } from '../systems/DebugFlags';
 
 type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt';
 
@@ -199,5 +200,19 @@ export class Enemy extends Entity {
     ctx.fillStyle = '#fff';
     ctx.font = '10px monospace';
     ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
+    
+    // Debug: collision box
+    if (DebugFlags.showHitboxes) {
+      // Collision box
+      ctx.strokeStyle = '#f00';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(this.x, this.y, this.width, this.height);
+      // Attack hitbox
+      if (this.state === 'attack') {
+        const atkX = this.facing > 0 ? this.x + this.width : this.x - 60;
+        ctx.strokeStyle = '#f80';
+        ctx.strokeRect(atkX, this.y, 60, this.height);
+      }
+    }
   }
 }

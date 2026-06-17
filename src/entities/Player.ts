@@ -1,5 +1,6 @@
 import { Entity } from '../engine/Game';
 import { InputState } from '../engine/InputManager';
+import { DebugFlags } from '../systems/DebugFlags';
 
 export class Player extends Entity {
   private inputState!: InputState;
@@ -172,5 +173,18 @@ export class Player extends Entity {
     ctx.fillStyle = '#fff';
     ctx.font = '12px monospace';
     ctx.fillText(`${this.state.toUpperCase()} [${this.currentFrame}] r=${this.rapidCount}`, this.x, this.y - 5);
+    
+    // Debug: collision box
+    if (DebugFlags.showHitboxes) {
+      ctx.strokeStyle = '#0f0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(this.x, this.y, this.width, this.height);
+      // Attack hitbox
+      if (this.state === 'attack') {
+        const ax = this.facing > 0 ? this.x + this.width : this.x - 60;
+        ctx.strokeStyle = '#f80';
+        ctx.strokeRect(ax, this.y, 60, this.height);
+      }
+    }
   }
 }

@@ -3,6 +3,7 @@ import { InputManager } from './engine/InputManager';
 import { Player } from './entities/Player';
 import { StageManager } from './stages/StageManager';
 import { SpawnSystem } from './systems/SpawnSystem';
+import { DebugFlags } from './systems/DebugFlags';
 import idleUrl from '/assets/maki_idle.png';
 import walkUrl from '/assets/maki_spritesheet.png';
 import attackUrl from '/assets/maki_attack.png';
@@ -65,7 +66,8 @@ function updateInputs(): void {
   stage.setPosition(player.x);
   const enemies = spawner.getEnemies();
   const enemyHP = enemies.length > 0 ? ` Enemy:${enemies[0].health}` : '';
-  hud.textContent = `HP: ${player.health}${enemyHP}`;
+  const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';
+  hud.textContent = `HP: ${player.health}${enemyHP}${debugInfo}`;
   requestAnimationFrame(updateInputs);
 }
 updateInputs();
@@ -75,4 +77,5 @@ game.start();
 // Debug
 document.addEventListener('keydown', (e) => {
   if (e.key === 'h') player.hurt();
+  if (e.key === 'b') DebugFlags.showHitboxes = !DebugFlags.showHitboxes;
 });
