@@ -29,15 +29,37 @@ export interface HitboxConfig {
   };
 }
 
+export function resolveFacingHitbox(
+  entity: { x: number; y: number; width: number },
+  hitbox: HitboxRect,
+  facing: number,
+): HitboxRect {
+  if (facing >= 0) {
+    return {
+      x: entity.x + hitbox.x,
+      y: entity.y + hitbox.y,
+      w: hitbox.w,
+      h: hitbox.h,
+    };
+  }
+
+  return {
+    x: entity.x + entity.width - hitbox.x - hitbox.w,
+    y: entity.y + hitbox.y,
+    w: hitbox.w,
+    h: hitbox.h,
+  };
+}
+
 // マキ（プレイヤー）のデフォルト値
 export const MAKI_HITBOX: HitboxConfig = {
   frameWidth: 160,
   frameHeight: 192,
   frames: 3,
   hitboxes: {
-    body: { x: 0, y: 0, w: 160, h: 192 },
-    hurt: { x: 0, y: 0, w: 160, h: 192 },
-    attack: { x: 160, y: 40, w: 70, h: 80 },
+    body: { x: 34, y: 10, w: 92, h: 176 },
+    hurt: { x: 32, y: 10, w: 96, h: 176 },
+    attack: { x: 88, y: 46, w: 68, h: 44 },
   },
 };
 
@@ -47,9 +69,9 @@ export const GRUNT_HITBOX: HitboxConfig = {
   frameHeight: 192,
   frames: 2,
   hitboxes: {
-    body: { x: 0, y: 0, w: 160, h: 192 },
-    hurt: { x: 0, y: 0, w: 160, h: 192 },
-    attack: { x: 160, y: 40, w: 70, h: 80 },
+    body: { x: 28, y: 4, w: 104, h: 184 },
+    hurt: { x: 26, y: 4, w: 108, h: 184 },
+    attack: { x: 78, y: 40, w: 62, h: 58 },
   },
 };
 

@@ -1,0 +1,10 @@
+{
+  "frameWidth": 160,
+  "frameHeight": 192,
+  "frames": 2,
+  "hitboxes": {
+    "body": { "x": 0, "y": 0, "w": 160, "h": 192 },
+    "hurt": { "x": 0, "y": 0, "w": 160, "h": 192 },
+    "attack": { "x": 160, "y": 40, "w": 70, "h": 80 }
+  }
+}
