@@ -21,6 +21,8 @@ export class Game {
   private backgroundEntity?: Entity;
   private lastTime: number = 0;
   private running: boolean = false;
+  private hitStopTimer: number = 0;
+  cameraX: number = 0;
   
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -44,6 +46,10 @@ export class Game {
   addEntity(entity: Entity): void {
     this.entities.push(entity);
   }
+
+  requestHitStop(duration: number): void {
+    this.hitStopTimer = Math.max(this.hitStopTimer, duration);
+  }
   
   private loop(currentTime: number): void {
     const dt = (currentTime - this.lastTime) / 1000;
@@ -58,6 +64,11 @@ export class Game {
   }
   
   private update(dt: number): void {
+    if (this.hitStopTimer > 0) {
+      this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
+      return;
+    }
+
     if (this.backgroundEntity) this.backgroundEntity.update(dt);
     for (const entity of this.entities) {
       if (entity.active) entity.update(dt);
@@ -67,8 +78,11 @@ export class Game {
   private render(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     if (this.backgroundEntity) this.backgroundEntity.render(this.ctx);
+    this.ctx.save();
+    this.ctx.translate(-this.cameraX, 0);
     for (const entity of this.entities) {
       if (entity.active) entity.render(this.ctx);
     }
+    this.ctx.restore();
   }
 }

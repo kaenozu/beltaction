@@ -10,6 +10,7 @@ import attackUrl from '/assets/maki_attack.png';
 import jumpUrl from '/assets/maki_jump.png';
 import hurtUrl from '/assets/maki_hurt.png';
 import gruntUrl from '/assets/grunt_spritesheet.png';
+import gruntHurtUrl from '/assets/grunt_hurt.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -18,7 +19,7 @@ const input = new InputManager();
 const stage = new StageManager();
 
 const player = new Player(100, 300, 'Maki');
-const spawner = new SpawnSystem(() => player);
+const spawner = new SpawnSystem(() => player, () => game.requestHitStop(0.06));
 
 const idleImg = new Image();
 idleImg.src = idleUrl;
@@ -56,7 +57,17 @@ gruntSheet.onload = () => {
   spawner.spriteImage = gruntSheet;
 };
 
+const gruntHurtSheet = new Image();
+gruntHurtSheet.src = gruntHurtUrl;
+gruntHurtSheet.onload = () => {
+  spawner.hurtImage = gruntHurtSheet;
+};
+
 game.setBackground(stage);
+
+player.onDeath = () => {
+  hud.textContent = 'GAME OVER - Refresh to restart';
+};
 
 game.addEntity(spawner);
 game.addEntity(player);
@@ -64,6 +75,7 @@ game.addEntity(player);
 function updateInputs(): void {
   player.setInput(input.getState('player1'));
   stage.setPosition(player.x);
+  game.cameraX = stage.getScrollX();
   const enemies = spawner.getEnemies();
   const enemyHP = enemies.length > 0 ? ` Enemy:${enemies.length} HP:${enemies[0].health}` : '';
   const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';

@@ -11,6 +11,7 @@ function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
 export class SpawnSystem extends Entity {
   private enemies: Enemy[] = [];
   private _spriteImage: HTMLImageElement | null = null;
+  private _hurtImage: HTMLImageElement | null = null;
   private playerAttackHits: Set<Enemy> = new Set();
   private effects: HitEffect[] = [];
   private readonly ENGAGE_OFFSETS = [58, -58, 30, -30, 0, 45, -45];
@@ -23,8 +24,16 @@ export class SpawnSystem extends Entity {
       enemy.spriteImage = img;
     }
   }
+
+  get hurtImage(): HTMLImageElement | null { return this._hurtImage; }
+  set hurtImage(img: HTMLImageElement | null) {
+    this._hurtImage = img;
+    for (const enemy of this.enemies) {
+      enemy.hurtImage = img;
+    }
+  }
   
-  constructor(private getPlayer: () => Player) {
+  constructor(private getPlayer: () => Player, private onHitStop: () => void = () => {}) {
     super(0, 0);
   }
   
@@ -61,13 +70,16 @@ export class SpawnSystem extends Entity {
       const hurt = enemy.getHurtHitbox();
 
       if (rectsOverlap(atk, hurt)) {
-        enemy.takeDamage(20);
-        this.playerAttackHits.add(enemy);
         const left = Math.max(atk.x, hurt.x);
         const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
         const top = Math.max(atk.y, hurt.y);
         const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
-        this.spawnHitEffect((left + right) / 2, (top + bottom) / 2);
+        enemy.takeDamage(20);
+        this.playerAttackHits.add(enemy);
+        if (!enemy.isDead) {
+          this.spawnHitEffect((left + right) / 2, (top + bottom) / 2);
+        }
+        this.onHitStop();
       }
     }
   }
@@ -88,10 +100,13 @@ export class SpawnSystem extends Entity {
   
   spawnEnemy(): void {
     const player = this.getPlayer();
-    const spawnX = player.x + player.width * 2 + Math.random() * 80;
+    const spawnX = Math.min(player.x + player.width * 2 + Math.random() * 80, 2000 - 160);
     const enemy = new Enemy(spawnX, this.GROUND_Y, this.getPlayer);
     enemy.spriteImage = this.spriteImage;
+    enemy.hurtImage = this.hurtImage;
     enemy.onHit = (x: number, y: number) => this.spawnHitEffect(x, y);
+    enemy.onHitStop = this.onHitStop;
+    enemy.onDeath = (x: number, y: number) => this.spawnHitEffect(x, y);
     this.enemies.push(enemy);
   }
   

@@ -174,10 +174,13 @@ Use the attached concept art AND the idle frame as the main visual references. T
 
 IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
 
+CRITICAL: This is a 4-frame strip, NOT a single image. Frame 1 contains the hurt pose; frames 2-4 are solid green background. The hurt frame must be the exact same size and placement as the idle frame — fill the full 160x192 frame, feet at bottom, head near top, body spanning the width.
+
 Technical requirements:
-- Single frame (not a strip).
-- Frame size: 800x960 pixels (5x scale of 160x192).
-- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background.
+- 4 frames arranged in a single horizontal row. Only frame 1 (leftmost) contains the hurt pose. Frames 2-4 are blank (solid green background).
+- Frame size: 800x960 pixels per frame (5x scale of 160x192).
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 2-4 must be 100% green with NO content.
 - Side view, facing right, same perspective as the idle frame.
 - Feet aligned to the bottom of the frame.
 - Same body proportions, outfit, and colors as the idle frame.
@@ -186,6 +189,66 @@ Technical requirements:
 
 Pose:
 - Hit reaction / flinch pose. Only the upper body and face react — head snaps back slightly, arms flinch upward. The lower body (legs, hips, feet) must stay planted exactly as in the idle frame. No stepping back, no knee bending, no body leaning backward. Just the upper torso and head recoiling from the impact, like the Final Fight Maki hit animation.
+```
+
+---
+
+## Maki Death Frame Prompt
+
+Attach the Maki concept art AND the idle frame as references.
+
+```text
+Create a pixel-art death/knockout frame for the player character Maki for a side-scrolling arcade beat-em-up game.
+
+Use the attached concept art AND the idle frame as the main visual references. The death frame must exactly match the idle/walk/attack frames in style, proportions, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
+
+CRITICAL: This is a 4-frame strip, NOT a single image. Frame 1 contains the death pose; frames 2-4 are solid green background. The death frame must be the exact same size and placement as the idle frame — fill the full 160x192 frame, feet at bottom, head near top, body spanning the width. Same visual scale — same head size, same body proportions, same line thickness, same height as idle.
+
+Technical requirements:
+- 4 frames in a single horizontal row. Only frame 1 (leftmost) contains the death pose. Frames 2-4 are blank (solid green background).
+- Frame size: 800x960 pixels per frame (5x scale of 160x192).
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 2-4 must be 100% green with NO content.
+- Side view, facing right, same perspective as the idle frame.
+- Feet aligned to the bottom of the frame.
+- Same body proportions, outfit, and colors as the idle frame.
+- Clean pixel art at this 5x scale — each "pixel" should be a crisp 5x5 block, no sub-pixel details, no blur, no gradients, no anti-aliased mush.
+- No text, labels, borders, or UI.
+
+Pose:
+- Dramatic knockout pose — whole body reacting to a fatal blow. Arms flung wide or up, head thrown back, back arched, legs slightly bent or one foot lifting off the ground. The character should look like they've been hit with massive force and are about to collapse. Dynamic, exaggerated pose that clearly reads as "defeated." Keep feet at the bottom of the frame — character is still on their feet but reeling from the final hit.
+```
+
+---
+
+## Maki Down Frame Prompt
+
+Attach the Maki concept art AND the idle frame as references.
+
+```text
+Create a pixel-art down/knocked-out frame for the player character Maki for a side-scrolling arcade beat-em-up game.
+
+Use the attached concept art AND the idle frame as the main visual references. The down frame must exactly match the idle/walk/attack frames in style, proportions, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block, allowing perfect nearest-neighbor downscale with pixel-snapper.
+
+CRITICAL: This is a 4-frame strip, NOT a single image. Frame 1 contains the down pose; frames 2-4 are solid green background.
+
+Technical requirements:
+- 4 frames in a single horizontal row. Only frame 1 (leftmost) contains the down pose. Frames 2-4 are blank (solid green background).
+- Frame size: 800x960 pixels per frame (5x scale of 160x192).
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 2-4 must be 100% green with NO content.
+- Side view, facing right. Character is lying on the ground, horizontal.
+- Character aligned to the bottom of the frame (the ground plane at the bottom edge).
+- Same body proportions, outfit, and colors as the idle frame.
+- Clean pixel art at this 5x scale — each "pixel" should be a crisp 5x5 block, no sub-pixel details, no blur, no gradients, no anti-aliased mush.
+- No text, labels, borders, or UI.
+
+Pose:
+- Knocked down / lying face-down on the ground. Character is sprawled out horizontally, arms and legs limp, head on the ground. The body should fill the frame width and be positioned at the bottom edge of the frame (the ground). This is the "lying defeated" pose that appears after the death animation finishes.
 ```
 
 ---
@@ -341,6 +404,98 @@ Frame layout (left to right):
 4. Blank — solid green background, no character
 
 Both frames form a fast punch sequence. Keep feet planted in both frames (no stepping forward).
+```
+
+---
+
+## Enemy: Grunt Hurt Strip Prompt
+
+Attach the Grunt idle frame as reference. Use the same visual design as the Grunt sprite sheet.
+
+```text
+Create a pixel-art 2-frame hurt/knockback animation strip for a Grunt enemy. Only the first 2 frames contain the hurt animation. Frames 3-4 are blank (solid green background). Match the attached idle frame in style, proportions, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block.
+
+CRITICAL: The character must be the EXACT SAME SIZE as the attached idle frame. Same head size, same body proportions, same line thickness, same height.
+
+CRITICAL: This is a 4-frame strip. Frame 1 contains the first hurt pose; frame 2 contains the second hurt pose; frames 3-4 are solid green background. The hurt frames must fill the full frame — feet at bottom, head near top, matching the idle frame's size and placement exactly.
+
+Technical requirements:
+- 4 frames in a single horizontal row. Frames 1-2 contain the character, frames 3-4 are solid green background.
+- Frame size: 800x960 pixels per frame (5x scale of 160x192). Character must fill the full frame — feet at bottom, head near top.
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 3-4 must be 100% green with NO content.
+- Side view, facing LEFT. Both hurt frames must face LEFT consistently.
+- Feet aligned to the bottom of both frames, same baseline as idle frame.
+- Same visual scale, line thickness, and shading style as the attached idle frame.
+- Clean pixel art — each "pixel" should be a crisp 5x5 block, no blur, no gradients.
+- No text, labels, borders, or UI.
+
+Frame layout (left to right):
+1. Hurt frame 1 — knocked back, upper body recoiling, head snapping back, arms flinching up, feet planted
+2. Hurt frame 2 — recovering, body coming back to neutral, arms lowering
+3. Blank — solid green background, no character
+4. Blank — solid green background, no character
+
+Both frames form a fast hit reaction sequence: impact → recovery. Keep feet planted in both frames.
+```
+
+---
+
+## Enemy: Grunt Death Strip Prompt
+
+Attach the Grunt idle frame as reference. Use the same visual design as the Grunt sprite sheet.
+
+```text
+Create a pixel-art death/knockout frame for a Grunt enemy. Only frame 1 contains the death pose. Frames 2-4 are blank (solid green background). Match the attached idle frame in style, proportions, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block.
+
+CRITICAL: The character must be the EXACT SAME SIZE as the attached idle frame. Fill the full frame — feet at bottom, head near top.
+
+Technical requirements:
+- 4 frames in a single horizontal row. Only frame 1 contains the character, frames 2-4 are solid green background.
+- Frame size: 800x960 pixels per frame (5x scale of 160x192). Character must fill the full frame — feet at bottom, head near top.
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 2-4 must be 100% green with NO content.
+- Side view, facing LEFT.
+- Feet aligned to the bottom of the frame.
+- Same visual scale, line thickness, and shading style as the attached idle frame.
+- Clean pixel art — each "pixel" should be a crisp 5x5 block, no blur, no gradients.
+- No text, labels, borders, or UI.
+
+Frame layout (left to right):
+1. Death frame — dramatic knockout, arms flung, body recoiling, head thrown back
+2. Blank — solid green background, no character
+3. Blank — solid green background, no character
+4. Blank — solid green background, no character
+```
+
+---
+
+## Enemy: Grunt Down Strip Prompt
+
+Attach the Grunt idle frame as reference.
+
+```text
+Create a pixel-art down/knocked-out frame for a Grunt enemy. Only frame 1 contains the down pose. Frames 2-4 are blank (solid green background). Match the attached idle frame in style, color palette, and line thickness.
+
+IMPORTANT: Generate at 5x scale for crisp downscaling. The final game uses 160x192 per frame. By generating at 5x, each game pixel becomes a 5x5 block.
+
+Technical requirements:
+- 4 frames in a single horizontal row. Only frame 1 contains the character, frames 2-4 are solid green background.
+- Frame size: 800x960 pixels per frame (5x scale of 160x192).
+- Total image size: 3200x960 pixels.
+- SOLID COLOR BACKGROUND: Use a uniform bright green (#00FF00). No gradients, no anti-aliased edges on the background. Frames 2-4 must be 100% green with NO content.
+- Side view, character lying horizontally on the ground, facing LEFT.
+- Character aligned to the bottom of the frame (ground plane at bottom edge).
+- Same clothing, colors, and style as the Grunt idle frame.
+- Clean pixel art — each "pixel" should be a crisp 5x5 block, no blur, no gradients.
+- No text, labels, borders, or UI.
+
+Pose:
+- Knocked down / lying face-down or on back on the ground. Limbs sprawled, completely defeated. Body positioned at the bottom edge of the frame.
 ```
 
 ---

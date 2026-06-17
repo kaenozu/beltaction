@@ -3,7 +3,7 @@ import { Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 
-type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt';
+type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt' | 'death';
 
 function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -36,7 +36,11 @@ export class Enemy extends Entity {
   private readonly ANIM_SPEED = 0.25;
   
   public spriteImage: HTMLImageElement | null = null;
+  public hurtImage: HTMLImageElement | null = null;
   public onHit: ((x: number, y: number) => void) | null = null;
+  public onHitStop: (() => void) | null = null;
+  public onDeath: ((x: number, y: number) => void) | null = null;
+  get isDead(): boolean { return this.state === 'death'; }
   private targetX: number | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
@@ -67,11 +71,19 @@ export class Enemy extends Entity {
         } else if (this.state === 'attack') {
           this.state = 'idle';
           this.velocityX = 0;
+        } else if (this.state === 'death') {
+          this.active = false;
         }
       }
     }
     
     if (this.state === 'hurt') {
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
+
+    if (this.state === 'death') {
       this.applyPhysics(dt);
       this.updateAnimation(dt);
       return;
@@ -85,12 +97,17 @@ export class Enemy extends Entity {
         this.attackHit = true;
         if (atk && rectsOverlap(atk, hurt)) {
           player.health -= this.damage;
-          player.hurt(this.x);
+          if (player.health <= 0) {
+            player.die(this.x);
+          } else {
+            player.hurt(this.x);
+          }
           const left = Math.max(atk.x, hurt.x);
           const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
           const top = Math.max(atk.y, hurt.y);
           const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
           this.onHit?.((left + right) / 2, (top + bottom) / 2);
+          this.onHitStop?.();
         }
       }
       this.applyPhysics(dt);
@@ -161,7 +178,10 @@ export class Enemy extends Entity {
   }
   
   private updateAnimation(dt: number): void {
-    if (this.state === 'walk' || this.state === 'attack') {
+    if (this.state === 'hurt' || this.state === 'death') {
+      this.currentFrame = 0;
+      this.animTimer = 0;
+    } else if (this.state === 'walk' || this.state === 'attack') {
       this.animTimer += dt;
       if (this.animTimer >= this.ANIM_SPEED) {
         this.animTimer = 0;
@@ -176,7 +196,11 @@ export class Enemy extends Entity {
   takeDamage(amount: number): void {
     this.health -= amount;
     if (this.health <= 0) {
-      this.active = false;
+      this.state = 'death';
+      this.stateTimer = 0.5;
+      this.velocityX = this.facing * -120;
+      this.attackHit = false;
+      this.onDeath?.(this.x + this.width / 2, this.y + this.height / 3);
       return;
     }
     this.state = 'hurt';
@@ -213,17 +237,40 @@ export class Enemy extends Entity {
     // Sprite faces left; flip scale based on direction
     ctx.scale(-this.facing, 1);
     
+    if (this.state === 'death' && this.hurtImage) {
+      const sx = this.currentFrame * this.FRAME_WIDTH;
+      ctx.globalAlpha = Math.max(0, this.stateTimer / 0.5);
+      ctx.drawImage(
+        this.hurtImage,
+        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        -this.width / 2, this.y, this.width, this.height,
+      );
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      return;
+    }
+
+    if (this.state === 'hurt' && this.hurtImage) {
+      const sx = this.currentFrame * this.FRAME_WIDTH;
+      ctx.drawImage(
+        this.hurtImage,
+        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        -this.width / 2, this.y, this.width, this.height,
+      );
+      ctx.restore();
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px monospace';
+      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
+      this.renderDebugHitboxes(ctx);
+      return;
+    }
+
     // Map state to frame index
     let frameIdx = 0;
     if (this.state === 'idle') frameIdx = 0;
     else if (this.state === 'walk') frameIdx = 1 + this.currentFrame;
     else if (this.state === 'attack') frameIdx = 3 + this.currentFrame;
     else if (this.state === 'hurt') frameIdx = 0;
-    
-    // Flash effect during hurt state
-    if (this.state === 'hurt') {
-      ctx.globalAlpha = Math.floor(this.stateTimer * 60) % 2 === 0 ? 0.5 : 1;
-    }
     
     const sx = frameIdx * this.FRAME_WIDTH;
     ctx.drawImage(
@@ -240,7 +287,10 @@ export class Enemy extends Entity {
     ctx.font = '10px monospace';
     ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
     
-    // Debug: collision box
+    this.renderDebugHitboxes(ctx);
+  }
+
+  private renderDebugHitboxes(ctx: CanvasRenderingContext2D): void {
     if (DebugFlags.showHitboxes) {
       ctx.strokeStyle = '#f00';
       ctx.lineWidth = 1;

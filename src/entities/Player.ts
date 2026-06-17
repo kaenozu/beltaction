@@ -10,7 +10,8 @@ export class Player extends Entity {
   public velocityY: number = 0;
   private onGround: boolean = true;
   private facing: number = 1;
-  state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' = 'idle';
+  state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' | 'death' = 'idle';
+  onDeath: (() => void) | null = null;
   private stateTimer: number = 0;
   private readonly GRAVITY = 1200;
   private readonly MOVE_SPEED = 220;
@@ -67,7 +68,7 @@ export class Player extends Entity {
   }
   
   private handleInput(): void {
-    if (this.state === 'hurt' || this.state === 'attack') return;
+    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'death') return;
     
     // Horizontal movement
     if (this.inputState.left) {
@@ -111,6 +112,9 @@ export class Player extends Entity {
       if (this.stateTimer <= 0) {
         if (this.state === 'attack') {
           this.rapidCount = Math.max(0, this.rapidCount - 1);
+        } else if (this.state === 'death') {
+          this.active = false;
+          return;
         }
         this.velocityX = 0;
         this.state = this.onGround ? 'idle' : 'jump';
@@ -118,14 +122,27 @@ export class Player extends Entity {
     }
   }
   
+  public die(fromX: number): void {
+    this.state = 'death';
+    this.stateTimer = 1.0;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.velocityX = fromX > this.x ? -120 : 120;
+    this.velocityY = -300;
+    this.facing = fromX > this.x ? 1 : -1;
+    this.onDeath?.();
+  }
+
   public hurt(fromX?: number): void {
     this.state = 'hurt';
-    this.stateTimer = 0.35;
-    this.velocityX = 0;
+    this.stateTimer = 0.4;
     this.animTimer = 0;
     this.currentFrame = 0;
     if (fromX !== undefined) {
       this.facing = fromX > this.x ? 1 : -1;
+      this.velocityX = fromX > this.x ? -200 : 200;
+    } else {
+      this.velocityX = 0;
     }
   }
   
@@ -154,6 +171,9 @@ export class Player extends Entity {
       this.velocityY = 0;
       this.onGround = true;
     }
+
+    // Stage boundary
+    this.x = Math.max(0, Math.min(this.x, 2000 - this.width));
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
@@ -179,8 +199,17 @@ export class Player extends Entity {
       );
     } else if (this.state === 'jump' && this.jumpImage) {
       ctx.drawImage(this.jumpImage, -this.width / 2, this.y, this.width, this.height);
-    } else if (this.state === 'hurt' && this.hurtImage) {
-      ctx.drawImage(this.hurtImage, -this.width / 2, this.y, this.width, this.height);
+    } else if ((this.state === 'hurt' || this.state === 'death') && this.hurtImage) {
+      const sx = this.currentFrame * this.FRAME_WIDTH;
+      const s = this.state === 'death' ? 1.2 : 1.15;
+      ctx.globalAlpha = this.state === 'death' ? Math.max(0, this.stateTimer / 0.6) : 1;
+      ctx.drawImage(
+        this.hurtImage,
+        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        -this.width * s / 2, this.y - this.height * (s - 1),
+        this.width * s, this.height * s,
+      );
+      ctx.globalAlpha = 1;
     } else if (this.idleImage) {
       ctx.drawImage(this.idleImage, -this.width / 2, this.y, this.width, this.height);
     } else {
