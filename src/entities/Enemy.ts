@@ -69,10 +69,11 @@ export class Enemy extends Entity {
         this.attackHit = true;
         player.health -= this.damage;
         player.hurt(this.x);
-        // Effect at midpoint between attack box origin and contact edge
+        // Effect at center of overlap between enemy attack and player
         const atkX = this.facing > 0 ? this.x + this.width : this.x - 60;
-        const contactX = Math.max(atkX, player.x);
-        this.onHit?.((atkX + contactX) / 2, player.y + player.height / 2);
+        const left = Math.max(atkX, player.x);
+        const right = Math.min(atkX + 60, player.x + player.width);
+        this.onHit?.((left + right) / 2, player.y + player.height / 2);
       }
       this.applyPhysics(dt);
       this.updateAnimation(dt);

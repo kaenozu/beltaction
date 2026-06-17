@@ -70,9 +70,10 @@ export class SpawnSystem extends Entity {
     if (rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)) {
       this.enemy.takeDamage(20);
       this.playerAttackHit = true;
-      // Effect at midpoint between attack box origin and contact edge
-      const contactX = Math.max(ax, bx);
-      this.spawnHitEffect((ax + contactX) / 2, by + bh / 2);
+      // Effect at center of overlap between attack box and enemy hitbox
+      const left = Math.max(ax, bx);
+      const right = Math.min(ax + aw, bx + bw);
+      this.spawnHitEffect((left + right) / 2, by + bh / 2);
     }
   }
   
