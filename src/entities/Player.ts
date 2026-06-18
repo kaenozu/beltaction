@@ -22,7 +22,7 @@ const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
 
 const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
   light: 1.04,
-  guardHead: 1.16,
+  guardHead: 1.04,
 };
 
 export class Player extends Entity {
@@ -56,6 +56,7 @@ export class Player extends Entity {
   public attackImage: HTMLImageElement | null = null;
   public jumpImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
+  public deathImage: HTMLImageElement | null = null;
   public downImage: HTMLImageElement | null = null;
   public downHitImage: HTMLImageElement | null = null;
   private readonly FRAME_WIDTH = 160;
@@ -69,12 +70,12 @@ export class Player extends Entity {
   private rapidCount: number = 0;
   private hurtDrawScale: number = 1.1;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
-  private readonly DOWN_SOURCE = { x: 21, y: 89, w: 241, h: 62 };
-  private readonly DOWN_HIT_SOURCE = { x: 24, y: 72, w: 239, h: 78 };
-  private readonly DOWN_DRAW_WIDTH = 190;
-  private readonly DOWN_HIT_DRAW_WIDTH = 190;
-  private readonly DOWN_DRAW_HEIGHT = 50;
-  private readonly DOWN_HIT_DRAW_HEIGHT = 62;
+  private readonly DOWN_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
+  private readonly DOWN_HIT_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
+  private readonly DOWN_DRAW_WIDTH = 210;
+  private readonly DOWN_HIT_DRAW_WIDTH = 210;
+  private readonly DOWN_DRAW_HEIGHT = 126;
+  private readonly DOWN_HIT_DRAW_HEIGHT = 126;
   get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
   get isGameOver(): boolean { return this.gameOverAnnounced; }
   get canReceiveGroundHit(): boolean {
@@ -315,9 +316,11 @@ export class Player extends Entity {
       );
     } else if (this.state === 'jump' && this.jumpImage) {
       ctx.drawImage(this.jumpImage, -this.width / 2, this.y, this.width, this.height);
-    } else if ((this.state === 'hurt' || this.state === 'death') && this.hurtImage) {
+    } else if (this.state === 'death' && this.deathImage) {
+      ctx.drawImage(this.deathImage, -this.width / 2, this.y, this.width, this.height);
+    } else if (this.state === 'hurt' && this.hurtImage) {
       const sx = this.currentFrame * this.FRAME_WIDTH;
-      const s = this.state === 'death' ? 1.2 : this.hurtDrawScale;
+      const s = this.hurtDrawScale;
       ctx.drawImage(
         this.hurtImage,
         sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,

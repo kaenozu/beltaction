@@ -4,13 +4,14 @@ import { Player } from './entities/Player';
 import { StageManager } from './stages/StageManager';
 import { SpawnSystem } from './systems/SpawnSystem';
 import { DebugFlags } from './systems/DebugFlags';
-import idleUrl from '/assets/maki_idle.png';
-import walkUrl from '/assets/maki_spritesheet.png';
-import attackUrl from '/assets/maki_attack.png';
-import jumpUrl from '/assets/maki_jump.png';
-import hurtUrl from '/assets/maki_hurt.png';
-import downUrl from '/assets/maki_down.png';
-import downHitUrl from '/assets/maki_downhit.png';
+import idleUrl from '/assets/maki_idle_generated_v2_despill.png';
+import walkUrl from '/assets/maki_walk_hairsway_stabilized_despill.png';
+import attackUrl from '/assets/maki_attack_generated_despill_hairfix.png';
+import jumpUrl from '/assets/maki_jump_generated_despill.png';
+import hurtUrl from '/assets/maki_hurt_generated_despill.png';
+import deathUrl from '/assets/maki_death_generated_despill.png';
+import downUrl from '/assets/maki_down_generated_despill.png';
+import downHitUrl from '/assets/maki_downhit_generated_despill.png';
 import gruntUrl from '/assets/grunt_spritesheet.png';
 import gruntHurtUrl from '/assets/grunt_hurt.png';
 
@@ -59,6 +60,12 @@ const hurtImg = new Image();
 hurtImg.src = hurtUrl;
 hurtImg.onload = () => {
   player.hurtImage = hurtImg;
+};
+
+const deathImg = new Image();
+deathImg.src = deathUrl;
+deathImg.onload = () => {
+  player.deathImage = deathImg;
 };
 
 const downImg = new Image();
