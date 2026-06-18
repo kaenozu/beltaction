@@ -405,6 +405,28 @@ Pose:
 
 ---
 
+## Verified Palette Colors (Maki)
+
+Use these exact hex colors for ALL Maki sprites. Run `tools/unify_palette.py` after generation to enforce palette matching.
+
+| Color | Hex | Usage |
+|-------|-----|-------|
+| ![#080000](https://via.placeholder.com/16/080000/000000?text=+) | `#080000` | Shadow / dark outline |
+| ![#201010](https://via.placeholder.com/16/201010/000000?text=+) | `#201010` | Hair shadow |
+| ![#203060](https://via.placeholder.com/16/203060/000000?text=+) | `#203060` | Blue accent / eye |
+| ![#402820](https://via.placeholder.com/16/402820/000000?text=+) | `#402820` | Hair midtone |
+| ![#480800](https://via.placeholder.com/16/480800/000000?text=+) | `#480800` | Outfit dark red shadow |
+| ![#604030](https://via.placeholder.com/16/604030/000000?text=+) | `#604030` | Pants / boots / belt |
+| ![#801800](https://via.placeholder.com/16/801800/000000?text=+) | `#801800` | Outfit red shadow |
+| ![#b05018](https://via.placeholder.com/16/b05018/000000?text=+) | `#b05018` | Skin shadow / glove dark |
+| ![#b08868](https://via.placeholder.com/16/b08868/000000?text=+) | `#b08868` | Pants highlight |
+| ![#b82000](https://via.placeholder.com/16/b82000/000000?text=+) | `#b82000` | Outfit red midtone |
+| ![#d06828](https://via.placeholder.com/16/d06828/000000?text=+) | `#d06828` | Glove / belt buckle |
+| ![#e88840](https://via.placeholder.com/16/e88840/000000?text=+) | `#e88840` | Skin shadow |
+| ![#f0a050](https://via.placeholder.com/16/f0a050/000000?text=+) | `#f0a050` | Skin midtone |
+| ![#f0e0c0](https://via.placeholder.com/16/f0e0c0/000000?text=+) | `#f0e0c0` | Skin highlight / white accent |
+| ![#f8c078](https://via.placeholder.com/16/f8c078/000000?text=+) | `#f8c078` | Skin base |
+
 ## Global Rules for All Sprite Prompts
 
 - Style: 16-bit arcade pixel art, side-scrolling beat-em-up feel, clean hard pixels, no blur, no AI mush.
@@ -418,6 +440,7 @@ Pose:
 - Export as a clean PNG sprite sheet.
 - Use a regular grid with no gaps between frames.
 - Sheet dimensions are exact (no extra padding around the grid).
+- **After generation, always run `python tools/unify_palette.py <reference.png> <targets...>` to enforce palette consistency.**
 
 ---
 

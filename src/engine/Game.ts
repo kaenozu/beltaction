@@ -4,6 +4,7 @@ export class Entity {
   width: number = 32;
   height: number = 48;
   active: boolean = true;
+  zIndex: number = 0;
   
   constructor(x: number = 0, y: number = 0) {
     this.x = x;
@@ -105,7 +106,8 @@ export class Game {
 
     this.ctx.save();
     this.ctx.translate(-this.cameraX + shakeX, 0);
-    for (const entity of this.entities) {
+    const sorted = [...this.entities].sort((a, b) => a.zIndex - b.zIndex);
+    for (const entity of sorted) {
       if (entity.active) entity.render(this.ctx);
     }
     this.ctx.restore();

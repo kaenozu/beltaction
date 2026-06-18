@@ -33,6 +33,11 @@ export class Player extends Entity {
   private onGround: boolean = true;
   private facing: number = 1;
   state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' | 'death' | 'down' | 'downhit' = 'idle';
+
+  private setState(s: typeof this.state): void {
+    this.state = s;
+    this.zIndex = (s === 'down' || s === 'downhit') ? -1 : 0;
+  }
   onDeath: (() => void) | null = null;
   private stateTimer: number = 0;
   private groundHitCount: number = 0;
@@ -124,28 +129,28 @@ export class Player extends Entity {
     if (this.inputState.left) {
       this.velocityX = -this.MOVE_SPEED;
       this.facing = -1;
-      if (this.onGround) this.state = 'walk';
+      if (this.onGround) this.setState('walk');
     } else if (this.inputState.right) {
       this.velocityX = this.MOVE_SPEED;
       this.facing = 1;
-      if (this.onGround) this.state = 'walk';
+      if (this.onGround) this.setState('walk');
     } else {
       this.velocityX = 0;
-      if (this.onGround) this.state = 'idle';
+      if (this.onGround) this.setState('idle');
     }
     
     // Jump
     if (this.inputState.up && this.onGround) {
       this.velocityY = this.JUMP_FORCE;
       this.onGround = false;
-      this.state = 'jump';
+      this.setState('jump');
     }
     
     // Attack (edge trigger: only on key down, not held)
     const attackDown = this.inputState.attack && !this.prevAttack;
     this.prevAttack = this.inputState.attack;
     if (attackDown && this.onGround) {
-      this.state = 'attack';
+      this.setState('attack');
       this.animTimer = 0;
       this.rapidCount++;
       // Each rapid press makes attack faster (0.3 → 0.15 min)
@@ -163,19 +168,19 @@ export class Player extends Entity {
         if (this.state === 'attack') {
           this.rapidCount = Math.max(0, this.rapidCount - 1);
         } else if (this.state === 'death') {
-          this.state = 'down';
+          this.setState('down');
           this.velocityX = 0;
           this.velocityY = 0;
           this.downGraceTimer = this.DOWN_GRACE_DURATION;
           return;
         } else if (this.state === 'downhit') {
-          this.state = 'down';
+          this.setState('down');
           this.velocityX = 0;
           this.announceGameOver();
           return;
         }
         this.velocityX = 0;
-        this.state = this.onGround ? 'idle' : 'jump';
+        this.setState(this.onGround ? 'idle' : 'jump');
       }
     }
   }
@@ -197,7 +202,7 @@ export class Player extends Entity {
   public die(fromX: number): void {
     if (this.isDefeated) return;
     this.health = 0;
-    this.state = 'death';
+    this.setState('death');
     this.stateTimer = 0.5;
     this.groundHitCount = 0;
     this.postGameGroundHitCount = 0;
@@ -220,7 +225,7 @@ export class Player extends Entity {
         return;
       }
     }
-    this.state = 'downhit';
+    this.setState('downhit');
     this.stateTimer = 0.3;
     if (!force) this.groundHitCount++;
     this.animTimer = 0;
@@ -231,7 +236,7 @@ export class Player extends Entity {
 
   private replayDeathFromGround(fromX: number): void {
     this.postGameGroundHitCount = 0;
-    this.state = 'death';
+    this.setState('death');
     this.stateTimer = 0.45;
     this.animTimer = 0;
     this.currentFrame = 0;
@@ -241,7 +246,7 @@ export class Player extends Entity {
   }
 
   public hurt(fromX?: number, reaction: HitReactionType = 'light'): void {
-    this.state = 'hurt';
+    this.setState('hurt');
     this.stateTimer = HURT_STUN_BY_REACTION[reaction];
     this.animTimer = 0;
     this.currentFrame = HURT_FRAME_BY_REACTION[reaction] % this.HURT_FRAME_COUNT;
