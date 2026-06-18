@@ -276,10 +276,9 @@ export class Enemy extends Entity {
     ctx.scale(-this.facing, 1);
     
     if (this.state === 'death' && this.hurtImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
       ctx.drawImage(
         this.hurtImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        this.FRAME_WIDTH, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
         -this.width / 2, this.y, this.width, this.height,
       );
       ctx.restore();

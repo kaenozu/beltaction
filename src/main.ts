@@ -13,8 +13,8 @@ import hurtUrl from '/assets/maki_hurt_generated_despill.png';
 import deathUrl from '/assets/maki_death_generated_despill.png';
 import downUrl from '/assets/maki_down_generated_despill.png';
 import downHitUrl from '/assets/maki_downhit_generated_despill.png';
-import gruntUrl from '/assets/grunt_spritesheet.png';
-import gruntHurtUrl from '/assets/grunt_hurt.png';
+import gruntUrl from '/assets/grunt_spritesheet_generated_despill.png';
+import gruntHurtUrl from '/assets/grunt_hurt_generated_despill.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
