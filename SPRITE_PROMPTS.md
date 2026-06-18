@@ -193,6 +193,51 @@ Pose:
 
 ---
 
+## Maki Light Hurt Frame Prompt
+
+Attach the current in-game Maki idle sprite as the PRIMARY reference. Attach the current in-game hurt sprite as a secondary reference only for general readability.
+
+```text
+Create a pixel-art light hurt reaction frame for the player character Maki for a side-scrolling arcade beat-em-up game.
+
+Use the attached current in-game Maki idle sprite as the PRIMARY reference. Match its exact game sprite scale, body height, head size, limb thickness, line thickness, pixel density, shading style, outfit colors, hair volume, boot size, and feet baseline.
+
+IMPORTANT: This is a LIGHT hit reaction, not a heavy knockback, not a head-hit guard, not a death pose, and not a knockdown pose. Maki stays standing on the ground and only reacts a little.
+
+Technical requirements:
+- Single full-body frame.
+- Final game frame size is 160x192 pixels.
+- Generate at 5x scale if possible: 800x960 pixels.
+- Solid bright green background (#00FF00) or transparent background if supported cleanly.
+- Side view, facing right.
+- Feet stay on the same bottom baseline as the idle frame.
+- Full body visible inside the frame.
+- Same body proportions, costume, colors, and pixel density as the idle frame.
+- Clean 16-bit arcade pixel art, crisp hard pixels, no blur, no anti-aliased mush.
+- No text, labels, borders, UI, hit sparks, blood, impact effects, or motion lines.
+
+Pose:
+- Maki has been hit by a light attack.
+- The reaction is small and quick, about half as dramatic as the current heavy-looking hurt frame.
+- Upper body recoils only slightly.
+- Head tilts back or to the side just a little, not a full snap.
+- Shoulders tense, but do not hunch hard.
+- One arm flinches slightly upward, the other stays near its normal fighting position.
+- Torso twist is mild, not dramatic.
+- Hips and legs stay almost exactly in the idle stance.
+- Knees may bend just a little, but both feet remain firmly planted.
+- Face shows a short sharp pain reaction, but not extreme agony.
+- The silhouette should clearly read as "light hit / small stagger."
+
+Avoid:
+- Do not make this look like a strong knockback.
+- Do not make this look like the head-guard hurt pose.
+- Do not make the body bend deeply, fold over, or throw the arms wide.
+- Do not change scale, body proportions, or stance width.
+```
+
+---
+
 ## Maki Alternate Hurt: Head Hit Prompt
 
 Attach the Maki concept art, idle frame, and current hurt frame as references.

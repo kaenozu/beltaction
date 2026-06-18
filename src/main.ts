@@ -21,7 +21,15 @@ const input = new InputManager();
 const stage = new StageManager();
 
 const player = new Player(100, 300, 'Maki');
-const spawner = new SpawnSystem(() => player, () => game.requestHitStop(0.06));
+const spawner = new SpawnSystem(
+  () => player,
+  (duration = 0.06, shakeDuration = 0, shakeMagnitude = 0) => {
+    game.requestHitStop(duration);
+    if (shakeDuration > 0 && shakeMagnitude > 0) {
+      game.requestScreenShake(shakeDuration, shakeMagnitude);
+    }
+  },
+);
 
 const idleImg = new Image();
 idleImg.src = idleUrl;

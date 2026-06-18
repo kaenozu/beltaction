@@ -142,7 +142,7 @@ Status: partially implemented.
 - Done: keep source/generated images under `assets/`
 - Done: keep runtime game assets under `public/assets/`
 - Done: keep prompt blocks in `SPRITE_PROMPTS.md`
-- Done: added `tools/normalize_maki_sprite.py` for Maki sprite normalization
+- Done: added `tools/frame_to_canvas.py` for sprite placement on 160×192 canvas
 - Remaining: document which source image produced each runtime asset
 - Remaining: add conversion examples near each prompt or in a small asset notes file
 

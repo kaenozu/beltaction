@@ -2,11 +2,7 @@ import { Entity } from '../engine/Game';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { HitEffect } from '../effects/HitEffect';
-import { HitboxRect } from './HitboxConfig';
-
-function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
+import { rectsOverlap } from './HitboxConfig';
 
 export class SpawnSystem extends Entity {
   private enemies: Enemy[] = [];
@@ -33,7 +29,10 @@ export class SpawnSystem extends Entity {
     }
   }
   
-  constructor(private getPlayer: () => Player, private onHitStop: () => void = () => {}) {
+  constructor(
+    private getPlayer: () => Player,
+    private onHitStop: (duration?: number, shakeDuration?: number, shakeMagnitude?: number) => void = () => {},
+  ) {
     super(0, 0);
   }
   
@@ -79,7 +78,7 @@ export class SpawnSystem extends Entity {
         if (!enemy.isDead) {
           this.spawnHitEffect((left + right) / 2, (top + bottom) / 2);
         }
-        this.onHitStop();
+        this.onHitStop(0.06);
       }
     }
   }

@@ -1,13 +1,9 @@
 import { Entity } from '../engine/Game';
 import { HitReactionType, Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
-import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
+import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
 type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt' | 'death';
-
-function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
 
 export class Enemy extends Entity {
   public health: number = 30;
@@ -40,7 +36,7 @@ export class Enemy extends Entity {
   public spriteImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
   public onHit: ((x: number, y: number) => void) | null = null;
-  public onHitStop: (() => void) | null = null;
+  public onHitStop: ((duration: number, shakeDuration?: number, shakeMagnitude?: number) => void) | null = null;
   public onDeath: ((x: number, y: number) => void) | null = null;
   get isDead(): boolean { return this.state === 'death'; }
   private targetX: number | null = null;
@@ -130,7 +126,8 @@ export class Enemy extends Entity {
           const top = Math.max(atk.y, hurt.y);
           const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
           this.onHit?.((left + right) / 2, (top + bottom) / 2);
-          this.onHitStop?.();
+          const heavy = this.currentAttackReaction === 'guardHead';
+          this.onHitStop?.(heavy ? 0.095 : 0.045, heavy ? 0.16 : 0.06, heavy ? 4 : 1.5);
         }
       }
       this.applyPhysics(dt);

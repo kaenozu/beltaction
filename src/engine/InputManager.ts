@@ -33,7 +33,7 @@ export class InputManager {
   }
   
   private handleKeyDown(e: KeyboardEvent): void {
-    const key = e.key.toLowerCase();
+    const key = e.key;
     for (const [playerId, bindings] of this.bindings) {
       if (Object.values(bindings).includes(key)) {
         if (key === ' ') e.preventDefault();
@@ -45,7 +45,7 @@ export class InputManager {
   }
   
   private handleKeyUp(e: KeyboardEvent): void {
-    const key = e.key.toLowerCase();
+    const key = e.key;
     for (const [playerId, bindings] of this.bindings) {
       if (Object.values(bindings).includes(key)) {
         const state = this.states.get(playerId) || this.createDefaultState();
@@ -54,18 +54,17 @@ export class InputManager {
       }
     }
   }
-  
+
   private createDefaultState(): InputState {
     return { up: false, down: false, left: false, right: false, attack: false };
   }
-  
+
   private updateState(state: InputState, key: string, value: boolean, bindings: KeyBindings): void {
-    const lowerKey = key.toLowerCase();
-    if (lowerKey === bindings.up.toLowerCase()) state.up = value;
-    if (lowerKey === bindings.down.toLowerCase()) state.down = value;
-    if (lowerKey === bindings.left.toLowerCase()) state.left = value;
-    if (lowerKey === bindings.right.toLowerCase()) state.right = value;
-    if (lowerKey === bindings.attack.toLowerCase()) state.attack = value;
+    if (key === bindings.up) state.up = value;
+    if (key === bindings.down) state.down = value;
+    if (key === bindings.left) state.left = value;
+    if (key === bindings.right) state.right = value;
+    if (key === bindings.attack) state.attack = value;
   }
   
   getState(playerId: string): InputState {

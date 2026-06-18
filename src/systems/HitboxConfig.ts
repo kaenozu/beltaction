@@ -53,6 +53,10 @@ export function resolveFacingHitbox(
 export const MAKI_HITBOX: HitboxConfig = makiData as HitboxConfig;
 export const GRUNT_HITBOX: HitboxConfig = gruntData as HitboxConfig;
 
+export function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
 /** JSON文字列からHitboxConfigをパースする（バリデーション付き） */
 export function parseHitboxConfig(json: string): HitboxConfig | null {
   try {

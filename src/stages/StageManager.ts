@@ -30,20 +30,21 @@ export class StageManager extends Entity {
     // Far background (sky + distant buildings with sx parallax)
     ctx.fillStyle = '#1a3a5a';
     ctx.fillRect(0, 0, 640, 200);
+    const wrapX = (x: number) => ((x % 640) + 640) % 640;
     for (let i = 0; i < 6; i++) {
-      ctx.fillRect((i * 300 - sx) % 640, 100, 40, 100);
+      ctx.fillRect(wrapX(i * 300 - sx), 100, 40, 100);
     }
     
     // Mid background (tall buildings with mx parallax)
     ctx.fillStyle = '#2d5a87';
     for (let i = 0; i < 8; i++) {
-      ctx.fillRect((i * 250 - mx) % 640, 150, 50, 150);
+      ctx.fillRect(wrapX(i * 250 - mx), 150, 50, 150);
     }
     
     // Near background (street lamps with fx parallax)
     ctx.fillStyle = '#555';
     for (let i = 0; i < 15; i++) {
-      ctx.fillRect((i * 100 - fx) % 640, 380, 10, 20);
+      ctx.fillRect(wrapX(i * 100 - fx), 380, 10, 20);
     }
     
     // Foreground (ground)
