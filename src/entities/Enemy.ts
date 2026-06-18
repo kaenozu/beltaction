@@ -159,11 +159,19 @@ export class Enemy extends Entity {
       this.attackHit = false;
       this.currentAttackReaction = this.nextAttackReaction();
     } else if (this.attackCooldown > 0 && dist < this.RETREAT_RANGE) {
+      // Cooldown: strafe instead of retreat to stay engaged
+      if (this.flankTargetX === null && Math.random() < 0.03) {
+        const side = Math.random() < 0.5 ? 1 : -1;
+        this.flankTargetX = player.x + side * this.FLANK_DISTANCE;
+      }
       this.state = 'walk';
-      this.velocityX = -this.facing * this.RETREAT_SPEED;
+      this.velocityX = this.flankTargetX !== null
+        ? Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED
+        : Math.sign(dx) * this.MOVE_SPEED * 0.4;
     } else if (dist < this.ATTACK_RANGE) {
-      this.velocityX = 0;
-      this.state = 'idle';
+      // In range but on cooldown: advance slowly instead of idle
+      this.state = 'walk';
+      this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.15;
     } else if (targetDist < 12) {
       this.velocityX = 0;
       this.state = 'idle';
