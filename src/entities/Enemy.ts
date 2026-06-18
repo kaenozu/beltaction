@@ -3,7 +3,7 @@ import { HitReactionType, Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
-type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt' | 'death';
+type EnemyState = 'idle' | 'walk' | 'attack' | 'heavyAttack' | 'hurt' | 'death';
 
 export class Enemy extends Entity {
   public health: number = 30;
@@ -25,6 +25,7 @@ export class Enemy extends Entity {
   private attackHit: boolean = false;
   private attackPatternIndex: number = 0;
   private currentAttackReaction: HitReactionType = 'light';
+  private currentAttackDamage: number = 5;
   private flankTargetX: number | null = null;
   private readonly BEHAVIOR_WALK_DURATION = 1.5;
   private readonly BEHAVIOR_IDLE_DURATION = 0.8;
@@ -35,6 +36,7 @@ export class Enemy extends Entity {
   
   public spriteImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
+  public heavyAttackImage: HTMLImageElement | null = null;
   public onHit: ((x: number, y: number) => void) | null = null;
   public onHitStop: ((duration: number, shakeDuration?: number, shakeMagnitude?: number) => void) | null = null;
   public onDeath: ((x: number, y: number) => void) | null = null;
@@ -42,6 +44,7 @@ export class Enemy extends Entity {
   private targetX: number | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
+  private readonly HEAVY_ATTACK_HITBOX: HitboxRect = { x: 88, y: 78, w: 54, h: 34 };
   private hitboxConfig: HitboxConfig = GRUNT_HITBOX;
   
   constructor(x: number, y: number, private player: () => Player) {
@@ -66,7 +69,7 @@ export class Enemy extends Entity {
         if (this.state === 'hurt') {
           this.state = 'idle';
           this.velocityX = 0;
-        } else if (this.state === 'attack') {
+        } else if (this.state === 'attack' || this.state === 'heavyAttack') {
           this.state = 'idle';
           this.velocityX = 0;
         } else if (this.state === 'death') {
@@ -102,7 +105,7 @@ export class Enemy extends Entity {
       return;
     }
     
-    if (this.state === 'attack') {
+    if (this.state === 'attack' || this.state === 'heavyAttack') {
       // Check hit on strike frame
       if (this.currentFrame === 1 && !this.attackHit) {
         const atk = this.getAttackHitbox();
@@ -112,7 +115,7 @@ export class Enemy extends Entity {
           if (player.canReceiveGroundHit || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
             player.downHit(this.x, DebugFlags.allowPostGameOverAttacks);
           } else if (!player.isDefeated) {
-            player.health -= this.damage;
+            player.health -= this.currentAttackDamage;
             if (player.health <= 0) {
               player.die(this.x);
             } else {
@@ -126,7 +129,7 @@ export class Enemy extends Entity {
           const top = Math.max(atk.y, hurt.y);
           const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
           this.onHit?.((left + right) / 2, (top + bottom) / 2);
-          const heavy = this.currentAttackReaction === 'guardHead';
+          const heavy = this.state === 'heavyAttack' || this.currentAttackReaction === 'guardHead';
           this.onHitStop?.(heavy ? 0.095 : 0.045, heavy ? 0.16 : 0.06, heavy ? 4 : 1.5);
         }
       }
@@ -150,14 +153,17 @@ export class Enemy extends Entity {
       this.state = 'walk';
       this.velocityX = Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED;
     } else if (dist < this.ATTACK_RANGE && this.attackCooldown <= 0) {
-      this.state = 'attack';
-      this.stateTimer = 0.4;
+      const heavy = this.nextAttackIsHeavy();
+      this.state = heavy ? 'heavyAttack' : 'attack';
+      this.stateTimer = heavy ? 0.58 : 0.4;
       this.animTimer = 0;
       this.currentFrame = 0;
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
       this.attackHit = false;
-      this.currentAttackReaction = this.nextAttackReaction();
+      this.currentAttackReaction = heavy ? 'guardHead' : this.nextAttackReaction();
+      this.currentAttackDamage = heavy ? 12 : this.damage;
+      if (heavy) this.attackPatternIndex++;
     } else if (this.attackCooldown > 0 && dist < this.RETREAT_RANGE) {
       // Cooldown: strafe instead of retreat to stay engaged
       if (this.flankTargetX === null && Math.random() < 0.03) {
@@ -208,6 +214,10 @@ export class Enemy extends Entity {
     this.attackPatternIndex++;
     return reaction;
   }
+
+  private nextAttackIsHeavy(): boolean {
+    return this.attackPatternIndex > 0 && this.attackPatternIndex % 3 === 2;
+  }
   
   private applyPhysics(dt: number): void {
     this.x += this.velocityX * dt;
@@ -217,7 +227,7 @@ export class Enemy extends Entity {
     if (this.state === 'hurt' || this.state === 'death') {
       this.currentFrame = 0;
       this.animTimer = 0;
-    } else if (this.state === 'walk' || this.state === 'attack') {
+    } else if (this.state === 'walk' || this.state === 'attack' || this.state === 'heavyAttack') {
       this.animTimer += dt;
       if (this.animTimer >= this.ANIM_SPEED) {
         this.animTimer = 0;
@@ -246,8 +256,10 @@ export class Enemy extends Entity {
   
   /** Current attack hitbox in world coords, or null if not on strike frame */
   getAttackHitbox(): HitboxRect | null {
-    if (this.state !== 'attack' || this.currentFrame !== 1) return null;
-    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
+    if (this.currentFrame !== 1) return null;
+    if (this.state === 'attack') return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
+    if (this.state === 'heavyAttack') return resolveFacingHitbox(this, this.HEAVY_ATTACK_HITBOX, this.facing);
+    return null;
   }
 
   getBodyHitbox(): HitboxRect {
@@ -289,6 +301,21 @@ export class Enemy extends Entity {
       const sx = this.currentFrame * this.FRAME_WIDTH;
       ctx.drawImage(
         this.hurtImage,
+        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        -this.width / 2, this.y, this.width, this.height,
+      );
+      ctx.restore();
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px monospace';
+      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
+      this.renderDebugHitboxes(ctx);
+      return;
+    }
+
+    if (this.state === 'heavyAttack' && this.heavyAttackImage) {
+      const sx = this.currentFrame * this.FRAME_WIDTH;
+      ctx.drawImage(
+        this.heavyAttackImage,
         sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
         -this.width / 2, this.y, this.width, this.height,
       );

@@ -15,6 +15,7 @@ import downUrl from '/assets/maki_down_generated_despill.png';
 import downHitUrl from '/assets/maki_downhit_generated_despill.png';
 import gruntUrl from '/assets/grunt_spritesheet_generated_despill.png';
 import gruntHurtUrl from '/assets/grunt_hurt_generated_despill.png';
+import gruntHeavyUrl from '/assets/grunt_heavy_generated_despill.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -97,6 +98,12 @@ const gruntHurtSheet = new Image();
 gruntHurtSheet.src = gruntHurtUrl;
 gruntHurtSheet.onload = () => {
   spawner.hurtImage = gruntHurtSheet;
+};
+
+const gruntHeavySheet = new Image();
+gruntHeavySheet.src = gruntHeavyUrl;
+gruntHeavySheet.onload = () => {
+  spawner.heavyAttackImage = gruntHeavySheet;
 };
 
 game.setBackground(stage);

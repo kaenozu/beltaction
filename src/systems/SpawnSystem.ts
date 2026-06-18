@@ -8,6 +8,7 @@ export class SpawnSystem extends Entity {
   private enemies: Enemy[] = [];
   private _spriteImage: HTMLImageElement | null = null;
   private _hurtImage: HTMLImageElement | null = null;
+  private _heavyAttackImage: HTMLImageElement | null = null;
   private playerAttackHits: Set<Enemy> = new Set();
   private effects: HitEffect[] = [];
   private readonly ENGAGE_OFFSETS = [58, -58, 30, -30, 0, 45, -45];
@@ -26,6 +27,14 @@ export class SpawnSystem extends Entity {
     this._hurtImage = img;
     for (const enemy of this.enemies) {
       enemy.hurtImage = img;
+    }
+  }
+
+  get heavyAttackImage(): HTMLImageElement | null { return this._heavyAttackImage; }
+  set heavyAttackImage(img: HTMLImageElement | null) {
+    this._heavyAttackImage = img;
+    for (const enemy of this.enemies) {
+      enemy.heavyAttackImage = img;
     }
   }
   
@@ -103,6 +112,7 @@ export class SpawnSystem extends Entity {
     const enemy = new Enemy(spawnX, this.GROUND_Y, this.getPlayer);
     enemy.spriteImage = this.spriteImage;
     enemy.hurtImage = this.hurtImage;
+    enemy.heavyAttackImage = this.heavyAttackImage;
     enemy.onHit = (x: number, y: number) => this.spawnHitEffect(x, y);
     enemy.onHitStop = this.onHitStop;
     enemy.onDeath = (x: number, y: number) => this.spawnHitEffect(x, y);
