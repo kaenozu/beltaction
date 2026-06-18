@@ -4,6 +4,7 @@ export interface KeyBindings {
   left: string;
   right: string;
   attack: string;
+  kick: string;
 }
 
 export interface InputState {
@@ -12,6 +13,7 @@ export interface InputState {
   left: boolean;
   right: boolean;
   attack: boolean;
+  kick: boolean;
 }
 
 export class InputManager {
@@ -21,11 +23,11 @@ export class InputManager {
   constructor() {
     this.bindings.set('player1', {
       up: ' ', down: 's', left: 'a', right: 'd',
-      attack: 'j'
+      attack: 'j', kick: 'k'
     });
     this.bindings.set('player2', {
       up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight',
-      attack: 'o'
+      attack: 'o', kick: 'p'
     });
     
     window.addEventListener('keydown', this.handleKeyDown.bind(this));
@@ -56,7 +58,7 @@ export class InputManager {
   }
 
   private createDefaultState(): InputState {
-    return { up: false, down: false, left: false, right: false, attack: false };
+    return { up: false, down: false, left: false, right: false, attack: false, kick: false };
   }
 
   private updateState(state: InputState, key: string, value: boolean, bindings: KeyBindings): void {
@@ -65,6 +67,7 @@ export class InputManager {
     if (key === bindings.left) state.left = value;
     if (key === bindings.right) state.right = value;
     if (key === bindings.attack) state.attack = value;
+    if (key === bindings.kick) state.kick = value;
   }
   
   getState(playerId: string): InputState {

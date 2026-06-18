@@ -7,6 +7,7 @@ import { DebugFlags } from './systems/DebugFlags';
 import idleUrl from '/assets/maki_idle_generated_v2_despill.png';
 import walkUrl from '/assets/maki_walk_hairsway_stabilized_despill.png';
 import attackUrl from '/assets/maki_attack_generated_despill_hairfix.png';
+import kickUrl from '/assets/maki_kick_generated_despill.png';
 import jumpUrl from '/assets/maki_jump_generated_despill.png';
 import hurtUrl from '/assets/maki_hurt_generated_despill.png';
 import deathUrl from '/assets/maki_death_generated_despill.png';
@@ -48,6 +49,12 @@ const attackSheet = new Image();
 attackSheet.src = attackUrl;
 attackSheet.onload = () => {
   player.attackImage = attackSheet;
+};
+
+const kickSheet = new Image();
+kickSheet.src = kickUrl;
+kickSheet.onload = () => {
+  player.kickImage = kickSheet;
 };
 
 const jumpImg = new Image();

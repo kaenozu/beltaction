@@ -55,8 +55,8 @@ export class SpawnSystem extends Entity {
   private checkPlayerAttack(): void {
     const player = this.getPlayer();
     
-    // Reset if player is not in attack state
-    if (player.state !== 'attack') {
+    // Reset if player is not in an attack state
+    if (player.state !== 'attack' && player.state !== 'kick') {
       this.playerAttackHits.clear();
       return;
     }
@@ -73,7 +73,7 @@ export class SpawnSystem extends Entity {
         const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
         const top = Math.max(atk.y, hurt.y);
         const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
-        enemy.takeDamage(20);
+        enemy.takeDamage(player.getAttackDamage());
         this.playerAttackHits.add(enemy);
         if (!enemy.isDead) {
           this.spawnHitEffect((left + right) / 2, (top + bottom) / 2);

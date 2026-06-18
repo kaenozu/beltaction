@@ -32,7 +32,7 @@ export class Player extends Entity {
   public velocityY: number = 0;
   private onGround: boolean = true;
   private facing: number = 1;
-  state: 'idle' | 'walk' | 'jump' | 'attack' | 'hurt' | 'death' | 'down' | 'downhit' = 'idle';
+  state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' = 'idle';
 
   private setState(s: typeof this.state): void {
     this.state = s;
@@ -54,6 +54,7 @@ export class Player extends Entity {
   public spriteImage: HTMLImageElement | null = null;
   public idleImage: HTMLImageElement | null = null;
   public attackImage: HTMLImageElement | null = null;
+  public kickImage: HTMLImageElement | null = null;
   public jumpImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
   public deathImage: HTMLImageElement | null = null;
@@ -61,21 +62,24 @@ export class Player extends Entity {
   public downHitImage: HTMLImageElement | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
+  private readonly KICK_FRAME_WIDTH = 220;
   currentFrame: number = 0;
   private animTimer: number = 0;
   private readonly WALK_FRAME_COUNT = 4;
   private readonly HURT_FRAME_COUNT = 2;
   private readonly ANIM_SPEED = 0.15;
   private prevAttack: boolean = false;
+  private prevKick: boolean = false;
   private rapidCount: number = 0;
   private hurtDrawScale: number = 1.1;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
+  private readonly KICK_HITBOX: HitboxRect = { x: 116, y: 58, w: 64, h: 34 };
   private readonly DOWN_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
   private readonly DOWN_HIT_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
-  private readonly DOWN_DRAW_WIDTH = 210;
-  private readonly DOWN_HIT_DRAW_WIDTH = 210;
-  private readonly DOWN_DRAW_HEIGHT = 126;
-  private readonly DOWN_HIT_DRAW_HEIGHT = 126;
+  private readonly DOWN_DRAW_WIDTH = 200;
+  private readonly DOWN_HIT_DRAW_WIDTH = 200;
+  private readonly DOWN_DRAW_HEIGHT = 120;
+  private readonly DOWN_HIT_DRAW_HEIGHT = 120;
   get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
   get isGameOver(): boolean { return this.gameOverAnnounced; }
   get canReceiveGroundHit(): boolean {
@@ -110,7 +114,7 @@ export class Player extends Entity {
         this.animTimer = 0;
         this.currentFrame = (this.currentFrame + 1) % this.WALK_FRAME_COUNT;
       }
-    } else if (this.state === 'attack') {
+    } else if (this.state === 'attack' || this.state === 'kick') {
       // Fast 2-frame: wind-up then strike
       const frameDuration = this.stateTimer / 2;
       this.currentFrame = this.animTimer >= frameDuration ? 1 : 0;
@@ -124,7 +128,7 @@ export class Player extends Entity {
   }
   
   private handleInput(): void {
-    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'death' || this.state === 'down' || this.state === 'downhit') return;
+    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'kick' || this.state === 'death' || this.state === 'down' || this.state === 'downhit') return;
     
     // Horizontal movement
     if (this.inputState.left) {
@@ -156,6 +160,16 @@ export class Player extends Entity {
       this.rapidCount++;
       // Each rapid press makes attack faster (0.3 → 0.15 min)
       this.stateTimer = Math.max(0.12, 0.3 - this.rapidCount * 0.03);
+      this.velocityX = 0;
+    }
+
+    const kickDown = this.inputState.kick && !this.prevKick;
+    this.prevKick = this.inputState.kick;
+    if (kickDown && this.onGround) {
+      this.setState('kick');
+      this.animTimer = 0;
+      this.currentFrame = 0;
+      this.stateTimer = 0.34;
       this.velocityX = 0;
     }
     
@@ -263,8 +277,14 @@ export class Player extends Entity {
   
   /** Current attack hitbox in world coords, or null if not on strike frame */
   getAttackHitbox(): HitboxRect | null {
-    if (this.state !== 'attack' || this.currentFrame !== 1) return null;
-    return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
+    if (this.currentFrame !== 1) return null;
+    if (this.state === 'attack') return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
+    if (this.state === 'kick') return resolveFacingHitbox(this, this.KICK_HITBOX, this.facing);
+    return null;
+  }
+
+  getAttackDamage(): number {
+    return this.state === 'kick' ? 28 : 20;
   }
 
   getBodyHitbox(): HitboxRect {
@@ -313,6 +333,13 @@ export class Player extends Entity {
         this.attackImage,
         sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
         -this.width / 2, this.y, this.width, this.height,
+      );
+    } else if (this.state === 'kick' && this.kickImage) {
+      const sx = this.currentFrame * this.KICK_FRAME_WIDTH;
+      ctx.drawImage(
+        this.kickImage,
+        sx, 0, this.KICK_FRAME_WIDTH, this.FRAME_HEIGHT,
+        -this.KICK_FRAME_WIDTH / 2, this.y, this.KICK_FRAME_WIDTH, this.height,
       );
     } else if (this.state === 'jump' && this.jumpImage) {
       ctx.drawImage(this.jumpImage, -this.width / 2, this.y, this.width, this.height);
