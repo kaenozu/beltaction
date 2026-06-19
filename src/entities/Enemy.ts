@@ -1,5 +1,5 @@
 import { Entity } from '../engine/Game';
-import { HitReactionType, Player } from './Player';
+import { DownHitReactionType, HitReactionType, Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
@@ -13,6 +13,7 @@ export class Enemy extends Entity {
   private readonly STOP_RANGE = 90;
   private readonly ATTACK_RANGE = 70;
   private readonly ATTACK_COOLDOWN = 1.5;
+  private readonly DOWNED_ATTACK_COOLDOWN = 2.1;
   private readonly RETREAT_RANGE = 130;
   private readonly RETREAT_SPEED = 45;
   private readonly TOO_CLOSE_RANGE = 24;
@@ -25,6 +26,7 @@ export class Enemy extends Entity {
   private attackHit: boolean = false;
   private attackPatternIndex: number = 0;
   private currentAttackReaction: HitReactionType = 'light';
+  private currentDownHitReaction: DownHitReactionType = 'body';
   private currentAttackDamage: number = 5;
   private flankTargetX: number | null = null;
   private readonly BEHAVIOR_WALK_DURATION = 1.5;
@@ -112,10 +114,11 @@ export class Enemy extends Entity {
         const hurt = player.getHurtHitbox();
         this.attackHit = true;
         if (atk && rectsOverlap(atk, hurt)) {
-          if (player.canReceiveGroundHit || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
-            player.downHit(this.x, DebugFlags.allowPostGameOverAttacks);
+          if (player.canReceiveGroundHit || player.canBeKnockedDownByFollowup || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
+            player.downHit(this.x, DebugFlags.allowPostGameOverAttacks, this.currentAttackDamage, this.currentDownHitReaction);
+            this.attackCooldown = Math.max(this.attackCooldown, this.DOWNED_ATTACK_COOLDOWN);
           } else if (!player.isDefeated) {
-            player.health -= this.currentAttackDamage;
+            if (!DebugFlags.noPlayerHpDamage) player.health -= this.currentAttackDamage;
             if (player.health <= 0) {
               player.die(this.x);
             } else {
@@ -140,6 +143,20 @@ export class Enemy extends Entity {
     
     const dist = Math.abs(dx);
     const targetDist = Math.abs(dxToTarget);
+    if (player.isDowned && !player.canReceiveGroundHit && !(DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
+      this.flankTargetX = null;
+      if (dist < this.RETREAT_RANGE) {
+        this.state = 'walk';
+        this.velocityX = -this.facing * this.RETREAT_SPEED;
+      } else {
+        this.state = 'idle';
+        this.velocityX = 0;
+      }
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
+
     if (dist < this.TOO_CLOSE_RANGE && this.flankTargetX === null) {
       const passDirection = this.x < player.x ? 1 : -1;
       this.flankTargetX = player.x + passDirection * this.FLANK_DISTANCE;
@@ -162,6 +179,7 @@ export class Enemy extends Entity {
       this.velocityX = 0;
       this.attackHit = false;
       this.currentAttackReaction = heavy ? 'guardHead' : this.nextAttackReaction();
+      this.currentDownHitReaction = heavy ? 'launch' : this.nextDownHitReaction();
       this.currentAttackDamage = heavy ? 12 : this.damage;
       if (heavy) this.attackPatternIndex++;
     } else if (this.attackCooldown > 0 && dist < this.RETREAT_RANGE) {
@@ -217,6 +235,11 @@ export class Enemy extends Entity {
 
   private nextAttackIsHeavy(): boolean {
     return this.attackPatternIndex > 0 && this.attackPatternIndex % 3 === 2;
+  }
+
+  private nextDownHitReaction(): DownHitReactionType {
+    const pattern: DownHitReactionType[] = ['body', 'back', 'body'];
+    return pattern[this.attackPatternIndex % pattern.length];
   }
   
   private applyPhysics(dt: number): void {

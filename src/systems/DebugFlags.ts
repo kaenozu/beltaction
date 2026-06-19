@@ -7,4 +7,5 @@
 export const DebugFlags = {
   showHitboxes: false,
   allowPostGameOverAttacks: false,
+  noPlayerHpDamage: false,
 };

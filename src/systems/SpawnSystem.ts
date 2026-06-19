@@ -11,7 +11,8 @@ export class SpawnSystem extends Entity {
   private _heavyAttackImage: HTMLImageElement | null = null;
   private playerAttackHits: Set<Enemy> = new Set();
   private effects: HitEffect[] = [];
-  private readonly ENGAGE_OFFSETS = [58, -58, 30, -30, 0, 45, -45];
+  private readonly ENGAGE_OFFSETS = [54, -54, 104, -104, 18, -18, 148, -148];
+  private readonly DOWNED_PRESSURE_OFFSETS = [64, -104, 134, -154, 38, -72, 178, -198];
   private readonly GROUND_Y = 480 - 192;
   
   get spriteImage(): HTMLImageElement | null { return this._spriteImage; }
@@ -101,7 +102,8 @@ export class SpawnSystem extends Entity {
       .forEach((enemy, index) => {
         const fallbackStep = Math.floor(index / 2) + 1;
         const fallbackSide = index % 2 === 0 ? 1 : -1;
-        const offset = this.ENGAGE_OFFSETS[index] ?? fallbackSide * (90 + fallbackStep * 55);
+        const offsets = player.isDowned ? this.DOWNED_PRESSURE_OFFSETS : this.ENGAGE_OFFSETS;
+        const offset = offsets[index] ?? fallbackSide * (player.isDowned ? 150 + fallbackStep * 45 : 90 + fallbackStep * 55);
         enemy.setTargetX(player.x + offset);
       });
   }

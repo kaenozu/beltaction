@@ -13,6 +13,7 @@ import hurtUrl from '/assets/maki_hurt_generated_despill.png';
 import deathUrl from '/assets/maki_death_generated_despill.png';
 import downUrl from '/assets/maki_down_generated_despill.png';
 import downHitUrl from '/assets/maki_downhit_generated_despill.png';
+import getupUrl from '/assets/maki_getup_generated_despill.png';
 import gruntUrl from '/assets/grunt_spritesheet_generated_despill.png';
 import gruntHurtUrl from '/assets/grunt_hurt_generated_despill.png';
 import gruntHeavyUrl from '/assets/grunt_heavy_generated_despill.png';
@@ -88,6 +89,12 @@ downHitImg.onload = () => {
   player.downHitImage = downHitImg;
 };
 
+const getupImg = new Image();
+getupImg.src = getupUrl;
+getupImg.onload = () => {
+  player.getupImage = getupImg;
+};
+
 const gruntSheet = new Image();
 gruntSheet.src = gruntUrl;
 gruntSheet.onload = () => {
@@ -123,9 +130,10 @@ function updateInputs(): void {
   const enemyHP = enemies.length > 0 ? ` Enemy:${enemies.length} HP:${enemies[0].health}` : '';
   const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';
   const postGameAttackInfo = DebugFlags.allowPostGameOverAttacks ? ' [POST-HIT]' : '';
+  const noDamageInfo = DebugFlags.noPlayerHpDamage ? ' [NO-DMG]' : '';
   hud.textContent = player.isGameOver
-    ? `GAME OVER - Refresh to restart${debugInfo}${postGameAttackInfo}`
-    : `HP: ${player.health}${enemyHP}${debugInfo}${postGameAttackInfo}`;
+    ? `GAME OVER - Refresh to restart${debugInfo}${postGameAttackInfo}${noDamageInfo}`
+    : `HP: ${player.health}${enemyHP}${debugInfo}${postGameAttackInfo}${noDamageInfo}`;
   requestAnimationFrame(updateInputs);
 }
 updateInputs();
@@ -138,5 +146,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '2') player.hurt(undefined, 'guardHead');
   if (e.key === 'b') DebugFlags.showHitboxes = !DebugFlags.showHitboxes;
   if (e.key === 'g') DebugFlags.allowPostGameOverAttacks = !DebugFlags.allowPostGameOverAttacks;
+  if (e.key === 'i') DebugFlags.noPlayerHpDamage = !DebugFlags.noPlayerHpDamage;
   if (e.key === 'e') spawner.spawnEnemy();
 });
