@@ -20,6 +20,7 @@ import gruntUrl from '/assets/grunt_spritesheet_generated_despill.png';
 import gruntHurtUrl from '/assets/grunt_hurt_generated_despill.png';
 import gruntHeavyUrl from '/assets/grunt_heavy_generated_despill.png';
 import gruntBodyBlowUrl from '/assets/grunt_bodyblow_generated_despill.png';
+import chainEnemyUrl from '/assets/chain_enemy_spritesheet_generated.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -134,6 +135,12 @@ gruntBodyBlowSheet.onload = () => {
   spawner.bodyBlowImage = gruntBodyBlowSheet;
 };
 
+const chainEnemySheet = new Image();
+chainEnemySheet.src = chainEnemyUrl;
+chainEnemySheet.onload = () => {
+  spawner.chainSpriteImage = chainEnemySheet;
+};
+
 game.setBackground(stage);
 
 player.onDeath = () => {
@@ -143,7 +150,7 @@ player.onDeath = () => {
 game.addEntity(spawner);
 game.addEntity(player);
 
-function updateInputs(): void {
+game.onFrame = () => {
   player.setInput(input.getState('player1'));
   stage.setPosition(player.x);
   game.cameraX = stage.getScrollX();
@@ -152,22 +159,28 @@ function updateInputs(): void {
   const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';
   const postGameAttackInfo = DebugFlags.allowPostGameOverAttacks ? ' [POST-HIT]' : '';
   const noDamageInfo = DebugFlags.noPlayerHpDamage ? ' [NO-DMG]' : '';
+  const invincibleInfo = player.isWakeupInvincible ? ' [INV]' : '';
   const dangerInfo = player.isLowHealth ? ' DANGER' : '';
   hud.textContent = player.isGameOver
     ? `GAME OVER - Refresh to restart${debugInfo}${postGameAttackInfo}${noDamageInfo}`
-    : `HP: ${player.health}${dangerInfo}${enemyHP}${debugInfo}${postGameAttackInfo}${noDamageInfo}`;
-  requestAnimationFrame(updateInputs);
-}
-updateInputs();
+    : `HP: ${player.health}${dangerInfo}${enemyHP}${invincibleInfo}${debugInfo}${postGameAttackInfo}${noDamageInfo}`;
+};
 
 game.start();
 
 // Debug
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'h' || e.key === '1') player.hurt(undefined, 'light');
-  if (e.key === '2') player.hurt(undefined, 'guardHead');
+  // (削除: 被弾テストは1/2/3からスポーンに変更)
   if (e.key === 'b') DebugFlags.showHitboxes = !DebugFlags.showHitboxes;
   if (e.key === 'g') DebugFlags.allowPostGameOverAttacks = !DebugFlags.allowPostGameOverAttacks;
   if (e.key === 'i') DebugFlags.noPlayerHpDamage = !DebugFlags.noPlayerHpDamage;
-  if (e.key === 'e') spawner.spawnEnemy();
+  const keyNum = parseInt(e.key);
+  if (!isNaN(keyNum) && keyNum >= 1 && keyNum <= 9) {
+    const kinds: Record<number, string> = {
+      1: 'grunt',
+      2: 'chain',
+    };
+    const kind = kinds[keyNum] ?? 'grunt'; // 3-9 は将来の敵タイプ用
+    spawner.spawnEnemy(kind as any);
+  }
 });

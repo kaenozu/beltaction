@@ -3,17 +3,19 @@ import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 
-export type HitReactionType = 'light' | 'guardHead';
+export type HitReactionType = 'light' | 'guardHead' | 'bodyBlow';
 export type DownHitReactionType = 'body' | 'back' | 'launch';
 
 const HURT_FRAME_BY_REACTION: Record<HitReactionType, number> = {
   light: 0,
   guardHead: 1,
+  bodyBlow: 1,
 };
 
 const HURT_STUN_BY_REACTION: Record<HitReactionType, number> = {
   light: 0.22,
   guardHead: 0.48,
+  bodyBlow: 0.58,
 };
 
 const LOW_HEALTH_HURT_STUN_BONUS = 0.08;
@@ -21,11 +23,13 @@ const LOW_HEALTH_HURT_STUN_BONUS = 0.08;
 const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
   light: 95,
   guardHead: 220,
+  bodyBlow: 72,
 };
 
 const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
   light: 1.04,
   guardHead: 1.04,
+  bodyBlow: 1.08,
 };
 
 type GroundHitPresentation = {
@@ -49,7 +53,7 @@ export class Player extends Entity {
   public velocityY: number = 0;
   private onGround: boolean = true;
   private facing: number = 1;
-  state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' | 'getup' | 'grabbed' = 'idle';
+  state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' | 'getup' | 'grabbed' | 'bound' = 'idle';
 
   private setState(s: typeof this.state): void {
     this.state = s;
@@ -60,6 +64,9 @@ export class Player extends Entity {
   private recoveryTimer: number = 0;
   private postGameGroundHitCount: number = 0;
   private downGraceTimer: number = 0;
+  private downPressureHitCount: number = 0;
+  private forceGetupAfterDownHit: boolean = false;
+  private wakeupInvincibleTimer: number = 0;
   private gameOverAnnounced: boolean = false;
   private currentHitReaction: HitReactionType = 'light';
   private currentDownHitReaction: DownHitReactionType = 'body';
@@ -68,10 +75,14 @@ export class Player extends Entity {
   private followupGrabberX: number | null = null;
   private grabImpactTimer: number = 0;
   private grabImpactDirection: number = 0;
+  private boundAnchorX: number = 0;
+  private boundPullSpeed: number = 0;
   private readonly POST_GAME_DEATH_REPLAY_HITS = 3;
   private readonly DOWN_GRACE_DURATION = 1.0;
   private readonly DOWN_RECOVERY_DURATION = 0.95;
   private readonly LOW_HEALTH_DOWN_RECOVERY_DURATION = 1.2;
+  private readonly MAX_DOWN_PRESSURE_HITS = 3;
+  private readonly WAKEUP_INVINCIBLE_DURATION = 1.05;
   private readonly GETUP_DURATION = 0.36;
   private readonly LOW_HEALTH_THRESHOLD = 30;
   private readonly LOW_HEALTH_MOVE_SPEED_MULTIPLIER = 0.88;
@@ -106,6 +117,8 @@ export class Player extends Entity {
   private prevKick: boolean = false;
   private rapidCount: number = 0;
   private hurtDrawScale: number = 1.1;
+  /** attack/kick開始時のstateTimerを保存（アニメーションのフレーム閾値に使う） */
+  private attackDuration: number = 0;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
   private readonly KICK_HITBOX: HitboxRect = { x: 116, y: 58, w: 64, h: 34 };
   private readonly DOWNED_HURT_HITBOX: HitboxRect = { x: -24, y: 72, w: 208, h: 120 };
@@ -119,9 +132,12 @@ export class Player extends Entity {
   get isGameOver(): boolean { return this.gameOverAnnounced; }
   get isLowHealth(): boolean { return this.health > 0 && this.health <= this.LOW_HEALTH_THRESHOLD; }
   get isDowned(): boolean { return this.state === 'down' || this.state === 'downhit' || this.state === 'getup'; }
+  get isWakeupInvincible(): boolean { return this.wakeupInvincibleTimer > 0 || this.state === 'getup'; }
   get isGrabbed(): boolean { return this.state === 'grabbed'; }
+  get isBound(): boolean { return this.state === 'bound'; }
   get isDoubleGrabbed(): boolean { return this.state === 'grabbed' && this.followupGrabberX !== null; }
-  get canBeGrabbed(): boolean { return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed; }
+  get canBeGrabbed(): boolean { return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isBound && !this.isWakeupInvincible; }
+  get canBeBound(): boolean { return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isBound && !this.isWakeupInvincible; }
   get facingDirection(): number { return this.facing; }
   get grabberDirection(): number { return this.grabberX >= this.x ? 1 : -1; }
   get grabFollowupX(): number { return this.x - this.grabberDirection * 68; }
@@ -131,7 +147,7 @@ export class Player extends Entity {
     return this.state === 'hurt' && this.currentHitReaction === 'guardHead';
   }
   get canReceiveGroundHit(): boolean {
-    return (this.state === 'down' || this.state === 'downhit') && !this.gameOverAnnounced;
+    return (this.state === 'down' || this.state === 'downhit') && !this.gameOverAnnounced && !this.forceGetupAfterDownHit && !this.isWakeupInvincible;
   }
   get canReceivePostGameHit(): boolean {
     return this.health <= 0 && this.gameOverAnnounced && (this.state === 'down' || this.state === 'downhit');
@@ -152,6 +168,7 @@ export class Player extends Entity {
     this.updateStateTimer(dt);
     this.updateRecovery(dt);
     this.updateDownGrace(dt);
+    this.updateWakeupInvincibility(dt);
     this.updateGrabImpact(dt);
     this.applyPhysics(dt);
     this.updateAnimation(dt);
@@ -179,9 +196,8 @@ export class Player extends Entity {
         this.currentFrame = (this.currentFrame + 1) % this.WALK_FRAME_COUNT;
       }
     } else if (this.state === 'attack' || this.state === 'kick') {
-      // Fast 2-frame: wind-up then strike
-      const frameDuration = this.stateTimer / 2;
-      this.currentFrame = this.animTimer >= frameDuration ? 1 : 0;
+      const half = this.attackDuration / 2;
+      this.currentFrame = this.animTimer >= half ? 1 : 0;
       this.animTimer += dt;
     } else if (this.state === 'getup') {
       const frameDuration = this.GETUP_DURATION / this.GETUP_FRAME_COUNT;
@@ -196,7 +212,7 @@ export class Player extends Entity {
   }
   
   private handleInput(): void {
-    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'kick' || this.state === 'death' || this.state === 'down' || this.state === 'downhit' || this.state === 'getup' || this.state === 'grabbed') return;
+    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'kick' || this.state === 'death' || this.state === 'down' || this.state === 'downhit' || this.state === 'getup' || this.state === 'grabbed' || this.state === 'bound') return;
     
     // Horizontal movement
     const moveSpeed = this.isLowHealth ? this.MOVE_SPEED * this.LOW_HEALTH_MOVE_SPEED_MULTIPLIER : this.MOVE_SPEED;
@@ -229,6 +245,7 @@ export class Player extends Entity {
       this.rapidCount++;
       // Each rapid press makes attack faster (0.3 → 0.15 min)
       this.stateTimer = Math.max(0.12, 0.3 - this.rapidCount * 0.03);
+      this.attackDuration = this.stateTimer;
       this.velocityX = 0;
     }
 
@@ -239,6 +256,7 @@ export class Player extends Entity {
       this.animTimer = 0;
       this.currentFrame = 0;
       this.stateTimer = 0.34;
+      this.attackDuration = this.stateTimer;
       this.velocityX = 0;
     }
     
@@ -259,11 +277,14 @@ export class Player extends Entity {
           this.recoveryTimer = 0;
           return;
         } else if (this.state === 'downhit') {
-          this.setState('down');
           this.velocityX = 0;
           if (this.health <= 0) {
+            this.setState('down');
             this.announceGameOver();
+          } else if (this.forceGetupAfterDownHit) {
+            this.startGetup(true);
           } else {
+            this.setState('down');
             this.recoveryTimer = this.getDownRecoveryDuration();
           }
           return;
@@ -278,6 +299,9 @@ export class Player extends Entity {
         } else if (this.state === 'grabbed') {
           this.releaseGrab();
           return;
+        } else if (this.state === 'bound') {
+          this.releaseBound();
+          return;
         }
         this.velocityX = 0;
         this.setState(this.onGround ? 'idle' : 'jump');
@@ -289,7 +313,7 @@ export class Player extends Entity {
     if (this.health <= 0 || this.state !== 'down' || this.recoveryTimer <= 0) return;
     this.recoveryTimer = Math.max(0, this.recoveryTimer - dt);
     if (this.recoveryTimer <= 0) {
-      this.startGetup();
+      this.startGetup(false);
     }
   }
 
@@ -297,6 +321,11 @@ export class Player extends Entity {
     if (this.health > 0 || this.state !== 'down' || this.gameOverAnnounced) return;
     this.downGraceTimer = Math.max(0, this.downGraceTimer - dt);
     if (this.downGraceTimer <= 0) this.announceGameOver();
+  }
+
+  private updateWakeupInvincibility(dt: number): void {
+    if (this.wakeupInvincibleTimer <= 0) return;
+    this.wakeupInvincibleTimer = Math.max(0, this.wakeupInvincibleTimer - dt);
   }
 
   private announceGameOver(): void {
@@ -313,6 +342,9 @@ export class Player extends Entity {
     this.setState('death');
     this.stateTimer = 0.5;
     this.postGameGroundHitCount = 0;
+    this.downPressureHitCount = 0;
+    this.forceGetupAfterDownHit = false;
+    this.wakeupInvincibleTimer = 0;
     this.downGraceTimer = 0;
     this.recoveryTimer = 0;
     this.gameOverAnnounced = false;
@@ -332,6 +364,8 @@ export class Player extends Entity {
         this.replayDeathFromGround(fromX);
         return;
       }
+    } else if (this.health > 0 && (this.state === 'down' || this.state === 'downhit')) {
+      this.downPressureHitCount++;
     }
     if (!force && !DebugFlags.noPlayerHpDamage && this.health > 0 && damage > 0) {
       this.health = Math.max(0, this.health - damage);
@@ -342,12 +376,39 @@ export class Player extends Entity {
     }
     this.currentDownHitReaction = reaction;
     const presentation = DOWN_HIT_PRESENTATION[reaction];
+    if (!force && this.health > 0 && this.downPressureHitCount >= this.MAX_DOWN_PRESSURE_HITS) {
+      this.forceGetupAfterDownHit = true;
+      this.downPressureHitCount = 0;
+    }
     this.setState('downhit');
     this.stateTimer = presentation.stun;
     this.recoveryTimer = 0;
     this.animTimer = 0;
     this.currentFrame = 0;
     this.velocityX = fromX > this.x ? -presentation.knockback : presentation.knockback;
+    this.facing = fromX > this.x ? 1 : -1;
+  }
+
+  public tripDown(fromX: number, damage: number = 0): void {
+    if (this.isDefeated || this.isDowned || this.isGrabbed || this.isBound) return;
+    if (!DebugFlags.noPlayerHpDamage && damage > 0) {
+      this.health = Math.max(0, this.health - damage);
+      if (this.health <= 0) {
+        this.die(fromX);
+        return;
+      }
+    }
+    this.currentDownHitReaction = 'back';
+    this.downPressureHitCount = 0;
+    this.forceGetupAfterDownHit = false;
+    const presentation = DOWN_HIT_PRESENTATION.back;
+    this.setState('downhit');
+    this.stateTimer = presentation.stun;
+    this.recoveryTimer = 0;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.velocityX = fromX > this.x ? -presentation.knockback : presentation.knockback;
+    this.velocityY = 0;
     this.facing = fromX > this.x ? 1 : -1;
   }
 
@@ -397,6 +458,41 @@ export class Player extends Entity {
     this.followupGrabberX = null;
     this.grabImpactTimer = 0;
     this.grabImpactDirection = 0;
+  }
+
+  public startBound(attackerX: number, duration: number, pullSpeed: number, damage: number): boolean {
+    if (!this.canBeBound) return false;
+    if (!DebugFlags.noPlayerHpDamage && damage > 0) {
+      this.health = Math.max(0, this.health - damage);
+      if (this.health <= 0) {
+        this.die(attackerX);
+        return false;
+      }
+    }
+    this.boundAnchorX = attackerX;
+    this.boundPullSpeed = pullSpeed;
+    this.facing = attackerX > this.x ? 1 : -1;
+    this.setState('bound');
+    this.stateTimer = duration;
+    this.recoveryTimer = 0;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.animTimer = 0;
+    this.currentFrame = HURT_FRAME_BY_REACTION.guardHead;
+    this.hurtDrawScale = 1;
+    return true;
+  }
+
+  public pullBoundToward(anchorX: number, dt: number): void {
+    if (this.state !== 'bound') return;
+    this.boundAnchorX = anchorX;
+    const center = this.x + this.width / 2;
+    const distance = this.boundAnchorX - center;
+    const maxStep = this.boundPullSpeed * dt;
+    const step = Math.max(-maxStep, Math.min(maxStep, distance));
+    this.x += step;
+    this.velocityX = 0;
+    this.velocityY = 0;
   }
 
   public updateGrabbedPosition(grabberX: number): void {
@@ -464,6 +560,14 @@ export class Player extends Entity {
     this.setState('idle');
   }
 
+  public releaseBound(): void {
+    if (this.state !== 'bound') return;
+    this.boundPullSpeed = 0;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.setState('idle');
+  }
+
   private enterDownedRecovery(): void {
     this.setState('down');
     this.stateTimer = 0;
@@ -476,9 +580,14 @@ export class Player extends Entity {
     return this.isLowHealth ? this.LOW_HEALTH_DOWN_RECOVERY_DURATION : this.DOWN_RECOVERY_DURATION;
   }
 
-  private startGetup(): void {
+  private startGetup(forceInvincible: boolean): void {
     this.setState('getup');
     this.stateTimer = this.GETUP_DURATION;
+    this.forceGetupAfterDownHit = false;
+    this.downPressureHitCount = 0;
+    this.wakeupInvincibleTimer = forceInvincible
+      ? this.WAKEUP_INVINCIBLE_DURATION
+      : Math.max(this.wakeupInvincibleTimer, this.GETUP_DURATION);
     this.velocityX = 0;
     this.velocityY = 0;
     this.animTimer = 0;
@@ -568,7 +677,7 @@ export class Player extends Entity {
         -this.width * s / 2, this.y - this.height * (s - 1),
         this.width * s, this.height * s,
       );
-    } else if (this.state === 'grabbed' && (this.grabbedImage || this.hurtImage)) {
+    } else if ((this.state === 'grabbed' || this.state === 'bound') && (this.grabbedImage || this.hurtImage)) {
       if (this.grabbedImage) {
         ctx.drawImage(this.grabbedImage, -this.width / 2, this.y, this.width, this.height);
       } else if (this.hurtImage) {

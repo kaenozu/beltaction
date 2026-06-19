@@ -5,12 +5,12 @@ export class Entity {
   height: number = 48;
   active: boolean = true;
   zIndex: number = 0;
-  
+
   constructor(x: number = 0, y: number = 0) {
     this.x = x;
     this.y = y;
   }
-  
+
   update(_dt: number): void {}
   render(_ctx: CanvasRenderingContext2D): void {}
   renderOverlay(_ctx: CanvasRenderingContext2D): void {}
@@ -28,27 +28,28 @@ export class Game {
   private screenShakeDuration: number = 0;
   private screenShakeMagnitude: number = 0;
   cameraX: number = 0;
-  
+  onFrame: (() => void) | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.ctx.imageSmoothingEnabled = false;
   }
-  
+
   setBackground(entity: Entity): void {
     this.backgroundEntity = entity;
   }
-  
+
   start(): void {
     this.running = true;
     this.lastTime = performance.now();
     requestAnimationFrame(this.loop.bind(this));
   }
-  
+
   stop(): void {
     this.running = false;
   }
-  
+
   addEntity(entity: Entity): void {
     this.entities.push(entity);
   }
@@ -62,19 +63,20 @@ export class Game {
     this.screenShakeDuration = Math.max(this.screenShakeDuration, duration);
     this.screenShakeMagnitude = Math.max(this.screenShakeMagnitude, magnitude);
   }
-  
+
   private loop(currentTime: number): void {
     const dt = (currentTime - this.lastTime) / 1000;
     this.lastTime = currentTime;
-    
+
+    this.onFrame?.();
     this.update(dt);
     this.render();
-    
+
     if (this.running) {
       requestAnimationFrame(this.loop.bind(this));
     }
   }
-  
+
   private update(dt: number): void {
     if (this.screenShakeTimer > 0) {
       this.screenShakeTimer = Math.max(0, this.screenShakeTimer - dt);
@@ -94,7 +96,7 @@ export class Game {
       if (entity.active) entity.update(dt);
     }
   }
-  
+
   private render(): void {
     this.ctx.imageSmoothingEnabled = false;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);

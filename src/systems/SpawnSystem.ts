@@ -1,17 +1,22 @@
 import { Entity } from '../engine/Game';
+import { ChainEnemy } from '../entities/ChainEnemy';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { HitEffect } from '../effects/HitEffect';
 import { DebugFlags } from './DebugFlags';
 import { rectsOverlap } from './HitboxConfig';
 
+type EnemyActor = Enemy | ChainEnemy;
+type EnemySpawnKind = 'auto' | 'grunt' | 'chain';
+
 export class SpawnSystem extends Entity {
-  private enemies: Enemy[] = [];
+  private enemies: EnemyActor[] = [];
   private _spriteImage: HTMLImageElement | null = null;
   private _hurtImage: HTMLImageElement | null = null;
   private _heavyAttackImage: HTMLImageElement | null = null;
   private _bodyBlowImage: HTMLImageElement | null = null;
-  private playerAttackHits: Set<Enemy> = new Set();
+  private _chainSpriteImage: HTMLImageElement | null = null;
+  private playerAttackHits: Set<EnemyActor> = new Set();
   private effects: HitEffect[] = [];
   private readonly ENGAGE_OFFSETS = [54, -54, 104, -104, 18, -18, 148, -148];
   private readonly GRAB_FOLLOWUP_OFFSETS = [0, 26, -34, 52, -64, 78, -92];
@@ -23,7 +28,23 @@ export class SpawnSystem extends Entity {
   set spriteImage(img: HTMLImageElement | null) {
     this._spriteImage = img;
     for (const enemy of this.enemies) {
-      enemy.spriteImage = img;
+      enemy.spriteImage = enemy instanceof ChainEnemy
+        ? (this._chainSpriteImage ?? img)
+        : img;
+      if (enemy instanceof ChainEnemy) {
+        enemy.useFallbackDetails = this._chainSpriteImage === null;
+      }
+    }
+  }
+
+  get chainSpriteImage(): HTMLImageElement | null { return this._chainSpriteImage; }
+  set chainSpriteImage(img: HTMLImageElement | null) {
+    this._chainSpriteImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof ChainEnemy) {
+        enemy.spriteImage = img ?? this._spriteImage;
+        enemy.useFallbackDetails = img === null;
+      }
     }
   }
 
@@ -139,11 +160,21 @@ export class SpawnSystem extends Entity {
       });
   }
   
-  spawnEnemy(): void {
+  spawnEnemy(kind: EnemySpawnKind = 'auto'): void {
     const player = this.getPlayer();
     const spawnX = Math.min(player.x + player.width * 2 + Math.random() * 80, 2000 - 160);
-    const enemy = new Enemy(spawnX, this.GROUND_Y, this.getPlayer);
-    enemy.spriteImage = this.spriteImage;
+    const resolvedKind = kind === 'auto'
+      ? (this.enemies.length > 0 && this.enemies.length % 4 === 3 ? 'chain' : 'grunt')
+      : kind;
+    const enemy: EnemyActor = resolvedKind === 'chain'
+      ? new ChainEnemy(spawnX, this.GROUND_Y, this.getPlayer)
+      : new Enemy(spawnX, this.GROUND_Y, this.getPlayer);
+    enemy.spriteImage = enemy instanceof ChainEnemy
+      ? (this.chainSpriteImage ?? this.spriteImage)
+      : this.spriteImage;
+    if (enemy instanceof ChainEnemy) {
+      enemy.useFallbackDetails = this.chainSpriteImage === null;
+    }
     enemy.hurtImage = this.hurtImage;
     enemy.heavyAttackImage = this.heavyAttackImage;
     enemy.bodyBlowImage = this.bodyBlowImage;
@@ -152,12 +183,16 @@ export class SpawnSystem extends Entity {
     enemy.onDeath = (x: number, y: number) => this.spawnHitEffect(x, y);
     this.enemies.push(enemy);
   }
+
+  spawnChainEnemy(): void {
+    this.spawnEnemy('chain');
+  }
   
   private spawnHitEffect(x: number, y: number, overlay: boolean = false): void {
     this.effects.push(new HitEffect(x, y, overlay));
   }
   
-  getEnemies(): Enemy[] {
+  getEnemies(): EnemyActor[] {
     return this.enemies.filter(enemy => enemy.active);
   }
   
