@@ -13,6 +13,7 @@ export class Entity {
   
   update(_dt: number): void {}
   render(_ctx: CanvasRenderingContext2D): void {}
+  renderOverlay(_ctx: CanvasRenderingContext2D): void {}
 }
 
 export class Game {
@@ -109,6 +110,9 @@ export class Game {
     const sorted = [...this.entities].sort((a, b) => a.zIndex - b.zIndex);
     for (const entity of sorted) {
       if (entity.active) entity.render(this.ctx);
+    }
+    for (const entity of sorted) {
+      if (entity.active) entity.renderOverlay(this.ctx);
     }
     this.ctx.restore();
   }

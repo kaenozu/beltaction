@@ -2,6 +2,7 @@ import { Entity } from '../engine/Game';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { HitEffect } from '../effects/HitEffect';
+import { DebugFlags } from './DebugFlags';
 import { rectsOverlap } from './HitboxConfig';
 
 export class SpawnSystem extends Entity {
@@ -9,10 +10,13 @@ export class SpawnSystem extends Entity {
   private _spriteImage: HTMLImageElement | null = null;
   private _hurtImage: HTMLImageElement | null = null;
   private _heavyAttackImage: HTMLImageElement | null = null;
+  private _bodyBlowImage: HTMLImageElement | null = null;
   private playerAttackHits: Set<Enemy> = new Set();
   private effects: HitEffect[] = [];
   private readonly ENGAGE_OFFSETS = [54, -54, 104, -104, 18, -18, 148, -148];
+  private readonly GRAB_FOLLOWUP_OFFSETS = [0, 26, -34, 52, -64, 78, -92];
   private readonly DOWNED_PRESSURE_OFFSETS = [64, -104, 134, -154, 38, -72, 178, -198];
+  private readonly POST_GAME_PRESSURE_OFFSETS = [44, -44, 82, -82, 120, -120, 158, -158];
   private readonly GROUND_Y = 480 - 192;
   
   get spriteImage(): HTMLImageElement | null { return this._spriteImage; }
@@ -36,6 +40,14 @@ export class SpawnSystem extends Entity {
     this._heavyAttackImage = img;
     for (const enemy of this.enemies) {
       enemy.heavyAttackImage = img;
+    }
+  }
+
+  get bodyBlowImage(): HTMLImageElement | null { return this._bodyBlowImage; }
+  set bodyBlowImage(img: HTMLImageElement | null) {
+    this._bodyBlowImage = img;
+    for (const enemy of this.enemies) {
+      enemy.bodyBlowImage = img;
     }
   }
   
@@ -96,14 +108,33 @@ export class SpawnSystem extends Entity {
   private assignEnemyTargets(): void {
     const player = this.getPlayer();
     const activeEnemies = this.enemies.filter(enemy => enemy.active);
+    let grabFollowupIndex = 0;
 
     activeEnemies
       .sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))
       .forEach((enemy, index) => {
+        if (player.isGrabbed && enemy.isGrapplingPlayer) {
+          enemy.setTargetX(enemy.x);
+          return;
+        }
+
         const fallbackStep = Math.floor(index / 2) + 1;
         const fallbackSide = index % 2 === 0 ? 1 : -1;
-        const offsets = player.isDowned ? this.DOWNED_PRESSURE_OFFSETS : this.ENGAGE_OFFSETS;
-        const offset = offsets[index] ?? fallbackSide * (player.isDowned ? 150 + fallbackStep * 45 : 90 + fallbackStep * 55);
+        const postGamePressure = player.isGameOver && DebugFlags.allowPostGameOverAttacks;
+        if (player.isGrabbed) {
+          const offset = this.GRAB_FOLLOWUP_OFFSETS[grabFollowupIndex]
+            ?? grabFollowupIndex * 24;
+          grabFollowupIndex++;
+          enemy.setTargetX(player.grabFollowupX + offset);
+          return;
+        }
+
+        const offsets = postGamePressure
+          ? this.POST_GAME_PRESSURE_OFFSETS
+          : player.isDowned ? this.DOWNED_PRESSURE_OFFSETS : this.ENGAGE_OFFSETS;
+        const fallbackBase = postGamePressure ? 90 : player.isDowned ? 150 : 90;
+        const fallbackSpread = postGamePressure ? 36 : player.isDowned ? 45 : 55;
+        const offset = offsets[index] ?? fallbackSide * (fallbackBase + fallbackStep * fallbackSpread);
         enemy.setTargetX(player.x + offset);
       });
   }
@@ -115,14 +146,15 @@ export class SpawnSystem extends Entity {
     enemy.spriteImage = this.spriteImage;
     enemy.hurtImage = this.hurtImage;
     enemy.heavyAttackImage = this.heavyAttackImage;
-    enemy.onHit = (x: number, y: number) => this.spawnHitEffect(x, y);
+    enemy.bodyBlowImage = this.bodyBlowImage;
+    enemy.onHit = (x: number, y: number, overlay: boolean = false) => this.spawnHitEffect(x, y, overlay);
     enemy.onHitStop = this.onHitStop;
     enemy.onDeath = (x: number, y: number) => this.spawnHitEffect(x, y);
     this.enemies.push(enemy);
   }
   
-  private spawnHitEffect(x: number, y: number): void {
-    this.effects.push(new HitEffect(x, y));
+  private spawnHitEffect(x: number, y: number, overlay: boolean = false): void {
+    this.effects.push(new HitEffect(x, y, overlay));
   }
   
   getEnemies(): Enemy[] {
@@ -132,10 +164,20 @@ export class SpawnSystem extends Entity {
   override render(ctx: CanvasRenderingContext2D): void {
     const enemiesToRender = [...this.enemies].sort((a, b) => a.y - b.y);
     for (const enemy of enemiesToRender) {
-      if (enemy.active) enemy.render(ctx);
+      if (enemy.active && !enemy.isBodyBlowGrappler) enemy.render(ctx);
     }
     for (const effect of this.effects) {
-      if (effect.active) effect.render(ctx);
+      if (effect.active && !effect.overlay) effect.render(ctx);
+    }
+  }
+
+  override renderOverlay(ctx: CanvasRenderingContext2D): void {
+    const enemiesToRender = [...this.enemies].sort((a, b) => a.y - b.y);
+    for (const enemy of enemiesToRender) {
+      if (enemy.active && enemy.isBodyBlowGrappler) enemy.render(ctx);
+    }
+    for (const effect of this.effects) {
+      if (effect.active && effect.overlay) effect.render(ctx);
     }
   }
 }

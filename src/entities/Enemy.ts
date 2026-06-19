@@ -3,7 +3,7 @@ import { DownHitReactionType, HitReactionType, Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
-type EnemyState = 'idle' | 'walk' | 'attack' | 'heavyAttack' | 'hurt' | 'death';
+type EnemyState = 'idle' | 'walk' | 'attack' | 'heavyAttack' | 'grab' | 'grabFollowup' | 'hurt' | 'death';
 
 export class Enemy extends Entity {
   public health: number = 30;
@@ -12,7 +12,19 @@ export class Enemy extends Entity {
   private readonly MOVE_SPEED = 60;
   private readonly STOP_RANGE = 90;
   private readonly ATTACK_RANGE = 70;
+  private readonly GRAB_RANGE = 42;
+  private readonly GRAB_APPROACH_RANGE = 86;
+  private readonly GRAB_ATTEMPT_CHANCE = 0.34;
   private readonly ATTACK_COOLDOWN = 1.5;
+  private readonly GRAB_COOLDOWN = 4.2;
+  private readonly GRAB_DURATION = 2.8;
+  private readonly GRAB_TICK_INTERVAL = 0.38;
+  private readonly GRAB_TICK_DAMAGE = 2;
+  private readonly GRAB_FOLLOWUP_DURATION = 1.15;
+  private readonly GRAB_FOLLOWUP_COOLDOWN = 1.35;
+  private readonly GRAB_FOLLOWUP_TICK_INTERVAL = 0.42;
+  private readonly GRAB_FOLLOWUP_DAMAGE = 5;
+  private readonly GRAB_FOLLOWUP_JOIN_RANGE = 92;
   private readonly DOWNED_ATTACK_COOLDOWN = 2.1;
   private readonly RETREAT_RANGE = 130;
   private readonly RETREAT_SPEED = 45;
@@ -22,8 +34,12 @@ export class Enemy extends Entity {
   private state: EnemyState = 'walk';
   private stateTimer: number = 0;
   private attackCooldown: number = 0;
+  private grabCooldown: number = 1.2;
+  private grabTickTimer: number = 0;
+  private grabFollowupTickTimer: number = 0;
   private behaviorTimer: number = 0.5;
   private attackHit: boolean = false;
+  private tryingGrab: boolean = false;
   private attackPatternIndex: number = 0;
   private currentAttackReaction: HitReactionType = 'light';
   private currentDownHitReaction: DownHitReactionType = 'body';
@@ -39,10 +55,14 @@ export class Enemy extends Entity {
   public spriteImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
   public heavyAttackImage: HTMLImageElement | null = null;
-  public onHit: ((x: number, y: number) => void) | null = null;
+  public bodyBlowImage: HTMLImageElement | null = null;
+  public onHit: ((x: number, y: number, overlay?: boolean) => void) | null = null;
   public onHitStop: ((duration: number, shakeDuration?: number, shakeMagnitude?: number) => void) | null = null;
   public onDeath: ((x: number, y: number) => void) | null = null;
   get isDead(): boolean { return this.state === 'death'; }
+  get isHoldingPlayer(): boolean { return this.state === 'grab'; }
+  get isBodyBlowGrappler(): boolean { return this.state === 'grabFollowup'; }
+  get isGrapplingPlayer(): boolean { return this.state === 'grab' || this.state === 'grabFollowup'; }
   private targetX: number | null = null;
   private readonly FRAME_WIDTH = 160;
   private readonly FRAME_HEIGHT = 192;
@@ -63,6 +83,7 @@ export class Enemy extends Entity {
     this.facing = dx > 0 ? 1 : -1;
     
     this.attackCooldown -= dt;
+    this.grabCooldown -= dt;
     this.behaviorTimer -= dt;
     
     if (this.stateTimer > 0) {
@@ -74,6 +95,18 @@ export class Enemy extends Entity {
         } else if (this.state === 'attack' || this.state === 'heavyAttack') {
           this.state = 'idle';
           this.velocityX = 0;
+        } else if (this.state === 'grab') {
+          player.finishGrab(this.x);
+          this.state = 'idle';
+          this.velocityX = 0;
+          this.attackCooldown = this.ATTACK_COOLDOWN;
+          this.grabCooldown = this.GRAB_COOLDOWN;
+          this.tryingGrab = false;
+        } else if (this.state === 'grabFollowup') {
+          player.finishGrabFollowup();
+          this.state = 'idle';
+          this.velocityX = 0;
+          this.attackCooldown = this.GRAB_FOLLOWUP_COOLDOWN;
         } else if (this.state === 'death') {
           this.active = false;
         }
@@ -95,6 +128,7 @@ export class Enemy extends Entity {
     if (player.isGameOver && !DebugFlags.allowPostGameOverAttacks) {
       this.flankTargetX = null;
       this.attackHit = false;
+      this.tryingGrab = false;
       if (Math.abs(dx) < this.RETREAT_RANGE) {
         this.state = 'walk';
         this.velocityX = -this.facing * this.RETREAT_SPEED;
@@ -107,6 +141,46 @@ export class Enemy extends Entity {
       return;
     }
     
+    if (this.state === 'grab') {
+      player.updateGrabbedPosition(this.x);
+      this.velocityX = 0;
+      this.grabTickTimer -= dt;
+      if (this.grabTickTimer <= 0) {
+        this.grabTickTimer = this.GRAB_TICK_INTERVAL;
+        player.applyGrabDamage(this.GRAB_TICK_DAMAGE);
+        this.onHit?.(player.x + player.width / 2, player.y + player.height / 2);
+        this.onHitStop?.(0.035, 0.04, 1);
+      }
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
+
+    if (this.state === 'grabFollowup') {
+      if (!player.isGrabbed) {
+        player.finishGrabFollowup();
+        this.state = 'idle';
+        this.velocityX = 0;
+        this.applyPhysics(dt);
+        this.updateAnimation(dt);
+        return;
+      }
+      this.x = player.grabFollowupX;
+      this.facing = player.x > this.x ? 1 : -1;
+      player.updateGrabFollowupPosition(this.x);
+      this.velocityX = 0;
+      this.grabFollowupTickTimer -= dt;
+      if (this.grabFollowupTickTimer <= 0) {
+        this.grabFollowupTickTimer = this.GRAB_FOLLOWUP_TICK_INTERVAL;
+        player.receiveGrabFollowupHit(this.x, this.GRAB_FOLLOWUP_DAMAGE);
+        this.onHit?.(player.grabFollowupHitX, player.grabFollowupHitY, true);
+        this.onHitStop?.(0.055, 0.08, 2);
+      }
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
+
     if (this.state === 'attack' || this.state === 'heavyAttack') {
       // Check hit on strike frame
       if (this.currentFrame === 1 && !this.attackHit) {
@@ -145,6 +219,7 @@ export class Enemy extends Entity {
     const targetDist = Math.abs(dxToTarget);
     if (player.isDowned && !player.canReceiveGroundHit && !(DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
       this.flankTargetX = null;
+      this.tryingGrab = false;
       if (dist < this.RETREAT_RANGE) {
         this.state = 'walk';
         this.velocityX = -this.facing * this.RETREAT_SPEED;
@@ -157,7 +232,22 @@ export class Enemy extends Entity {
       return;
     }
 
-    if (dist < this.TOO_CLOSE_RANGE && this.flankTargetX === null) {
+    const canGrab = player.canBeGrabbed && this.grabCooldown <= 0;
+
+    if (
+      canGrab &&
+      this.tryingGrab &&
+      dist < this.GRAB_APPROACH_RANGE &&
+      dist >= this.GRAB_RANGE
+    ) {
+      this.state = 'walk';
+      this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.85;
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
+
+    if (dist < this.TOO_CLOSE_RANGE && this.flankTargetX === null && !(canGrab && this.tryingGrab) && !player.isGrabbed) {
       const passDirection = this.x < player.x ? 1 : -1;
       this.flankTargetX = player.x + passDirection * this.FLANK_DISTANCE;
     }
@@ -166,10 +256,49 @@ export class Enemy extends Entity {
     }
     
     // Attack if within range and cooldown ready
+    const followupDist = Math.abs(player.grabFollowupX - this.x);
+    const canJoinGrabFollowup =
+      player.isGrabbed &&
+      !this.isHoldingPlayer &&
+      !player.isDoubleGrabbed &&
+      this.attackCooldown <= 0;
+
     if (this.flankTargetX !== null) {
       this.state = 'walk';
       this.velocityX = Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED;
+    } else if (canJoinGrabFollowup && dist < this.GRAB_FOLLOWUP_JOIN_RANGE) {
+      if (player.startGrabFollowup(this.x)) {
+        this.state = 'grabFollowup';
+        this.stateTimer = this.GRAB_FOLLOWUP_DURATION;
+        this.grabFollowupTickTimer = 0;
+        this.velocityX = 0;
+        this.attackHit = false;
+        this.tryingGrab = false;
+      }
+    } else if (canJoinGrabFollowup && followupDist >= 8) {
+      this.state = 'walk';
+      this.velocityX = Math.sign(player.grabFollowupX - this.x) * this.MOVE_SPEED * 0.9;
+    } else if (player.isGrabbed && !this.isHoldingPlayer) {
+      this.state = 'idle';
+      this.velocityX = 0;
+    } else if (canGrab && dist < this.GRAB_RANGE && (this.tryingGrab || Math.random() < this.GRAB_ATTEMPT_CHANCE)) {
+      this.state = 'grab';
+      this.stateTimer = this.GRAB_DURATION;
+      this.grabTickTimer = 0;
+      this.attackCooldown = this.ATTACK_COOLDOWN;
+      this.velocityX = 0;
+      this.attackHit = false;
+      this.tryingGrab = false;
+      player.startGrabbed(this.x);
     } else if (dist < this.ATTACK_RANGE && this.attackCooldown <= 0) {
+      if (canGrab && dist < this.GRAB_APPROACH_RANGE && Math.random() < this.GRAB_ATTEMPT_CHANCE) {
+        this.tryingGrab = true;
+        this.state = 'walk';
+        this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.85;
+        this.applyPhysics(dt);
+        this.updateAnimation(dt);
+        return;
+      }
       const heavy = this.nextAttackIsHeavy();
       this.state = heavy ? 'heavyAttack' : 'attack';
       this.stateTimer = heavy ? 0.58 : 0.4;
@@ -178,6 +307,7 @@ export class Enemy extends Entity {
       this.attackCooldown = this.ATTACK_COOLDOWN;
       this.velocityX = 0;
       this.attackHit = false;
+      this.tryingGrab = false;
       this.currentAttackReaction = heavy ? 'guardHead' : this.nextAttackReaction();
       this.currentDownHitReaction = heavy ? 'launch' : this.nextDownHitReaction();
       this.currentAttackDamage = heavy ? 12 : this.damage;
@@ -250,7 +380,7 @@ export class Enemy extends Entity {
     if (this.state === 'hurt' || this.state === 'death') {
       this.currentFrame = 0;
       this.animTimer = 0;
-    } else if (this.state === 'walk' || this.state === 'attack' || this.state === 'heavyAttack') {
+    } else if (this.state === 'walk' || this.state === 'attack' || this.state === 'heavyAttack' || this.state === 'grab' || this.state === 'grabFollowup') {
       this.animTimer += dt;
       if (this.animTimer >= this.ANIM_SPEED) {
         this.animTimer = 0;
@@ -282,6 +412,8 @@ export class Enemy extends Entity {
     if (this.currentFrame !== 1) return null;
     if (this.state === 'attack') return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
     if (this.state === 'heavyAttack') return resolveFacingHitbox(this, this.HEAVY_ATTACK_HITBOX, this.facing);
+    if (this.state === 'grab') return resolveFacingHitbox(this, { x: 82, y: 42, w: 58, h: 92 }, this.facing);
+    if (this.state === 'grabFollowup') return resolveFacingHitbox(this, { x: 82, y: 60, w: 58, h: 64 }, this.facing);
     return null;
   }
 
@@ -341,6 +473,44 @@ export class Enemy extends Entity {
         this.heavyAttackImage,
         sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
         -this.width / 2, this.y, this.width, this.height,
+      );
+      ctx.restore();
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px monospace';
+      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
+      this.renderDebugHitboxes(ctx);
+      return;
+    }
+
+    if (this.state === 'grab') {
+      const sx = 0;
+      ctx.drawImage(
+        this.spriteImage,
+        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        -this.width / 2, this.y, this.width, this.height,
+      );
+      ctx.restore();
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px monospace';
+      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
+      this.renderDebugHitboxes(ctx);
+      return;
+    }
+
+    if (this.state === 'grabFollowup') {
+      const image = this.bodyBlowImage ?? this.spriteImage;
+      const sx = this.bodyBlowImage
+        ? this.currentFrame * this.FRAME_WIDTH
+        : (3 + this.currentFrame) * this.FRAME_WIDTH;
+      if (this.bodyBlowImage) ctx.scale(-1, 1);
+      const drawScale = this.bodyBlowImage ? 0.9 : 1;
+      const drawW = this.width * drawScale;
+      const drawH = this.height * drawScale;
+      const drawY = this.y + this.height - drawH;
+      ctx.drawImage(
+        image,
+        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        -drawW / 2, drawY, drawW, drawH,
       );
       ctx.restore();
       ctx.fillStyle = '#fff';

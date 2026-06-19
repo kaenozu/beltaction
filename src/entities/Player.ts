@@ -16,6 +16,8 @@ const HURT_STUN_BY_REACTION: Record<HitReactionType, number> = {
   guardHead: 0.48,
 };
 
+const LOW_HEALTH_HURT_STUN_BONUS = 0.08;
+
 const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
   light: 95,
   guardHead: 220,
@@ -47,7 +49,7 @@ export class Player extends Entity {
   public velocityY: number = 0;
   private onGround: boolean = true;
   private facing: number = 1;
-  state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' | 'getup' = 'idle';
+  state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' | 'getup' | 'grabbed' = 'idle';
 
   private setState(s: typeof this.state): void {
     this.state = s;
@@ -61,20 +63,32 @@ export class Player extends Entity {
   private gameOverAnnounced: boolean = false;
   private currentHitReaction: HitReactionType = 'light';
   private currentDownHitReaction: DownHitReactionType = 'body';
+  private grabberX: number = 0;
+  private grabOffsetX: number = 0;
+  private followupGrabberX: number | null = null;
+  private grabImpactTimer: number = 0;
+  private grabImpactDirection: number = 0;
   private readonly POST_GAME_DEATH_REPLAY_HITS = 3;
   private readonly DOWN_GRACE_DURATION = 1.0;
   private readonly DOWN_RECOVERY_DURATION = 0.95;
+  private readonly LOW_HEALTH_DOWN_RECOVERY_DURATION = 1.2;
   private readonly GETUP_DURATION = 0.36;
+  private readonly LOW_HEALTH_THRESHOLD = 30;
+  private readonly LOW_HEALTH_MOVE_SPEED_MULTIPLIER = 0.88;
+  private readonly GRAB_FOLLOWUP_IMPACT_DURATION = 0.18;
+  private readonly GRAB_FOLLOWUP_IMPACT_DISTANCE = 10;
   private readonly GRAVITY = 1200;
   private readonly MOVE_SPEED = 220;
   private readonly JUMP_FORCE = -500;
   
   public spriteImage: HTMLImageElement | null = null;
   public idleImage: HTMLImageElement | null = null;
+  public pinchIdleImage: HTMLImageElement | null = null;
   public attackImage: HTMLImageElement | null = null;
   public kickImage: HTMLImageElement | null = null;
   public jumpImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
+  public grabbedImage: HTMLImageElement | null = null;
   public deathImage: HTMLImageElement | null = null;
   public downImage: HTMLImageElement | null = null;
   public downHitImage: HTMLImageElement | null = null;
@@ -94,15 +108,25 @@ export class Player extends Entity {
   private hurtDrawScale: number = 1.1;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
   private readonly KICK_HITBOX: HitboxRect = { x: 116, y: 58, w: 64, h: 34 };
+  private readonly DOWNED_HURT_HITBOX: HitboxRect = { x: -24, y: 72, w: 208, h: 120 };
   private readonly DOWN_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
   private readonly DOWN_HIT_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
-  private readonly DOWN_DRAW_WIDTH = 200;
-  private readonly DOWN_HIT_DRAW_WIDTH = 200;
-  private readonly DOWN_DRAW_HEIGHT = 120;
-  private readonly DOWN_HIT_DRAW_HEIGHT = 120;
+  private readonly DOWN_DRAW_WIDTH = 224;
+  private readonly DOWN_HIT_DRAW_WIDTH = 208;
+  private readonly DOWN_DRAW_HEIGHT = 134;
+  private readonly DOWN_HIT_DRAW_HEIGHT = 125;
   get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
   get isGameOver(): boolean { return this.gameOverAnnounced; }
+  get isLowHealth(): boolean { return this.health > 0 && this.health <= this.LOW_HEALTH_THRESHOLD; }
   get isDowned(): boolean { return this.state === 'down' || this.state === 'downhit' || this.state === 'getup'; }
+  get isGrabbed(): boolean { return this.state === 'grabbed'; }
+  get isDoubleGrabbed(): boolean { return this.state === 'grabbed' && this.followupGrabberX !== null; }
+  get canBeGrabbed(): boolean { return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed; }
+  get facingDirection(): number { return this.facing; }
+  get grabberDirection(): number { return this.grabberX >= this.x ? 1 : -1; }
+  get grabFollowupX(): number { return this.x - this.grabberDirection * 68; }
+  get grabFollowupHitX(): number { return this.x + this.width / 2 - this.grabberDirection * 8; }
+  get grabFollowupHitY(): number { return this.y + this.height * 0.54; }
   get canBeKnockedDownByFollowup(): boolean {
     return this.state === 'hurt' && this.currentHitReaction === 'guardHead';
   }
@@ -128,8 +152,23 @@ export class Player extends Entity {
     this.updateStateTimer(dt);
     this.updateRecovery(dt);
     this.updateDownGrace(dt);
+    this.updateGrabImpact(dt);
     this.applyPhysics(dt);
     this.updateAnimation(dt);
+  }
+
+  private updateGrabImpact(dt: number): void {
+    if (this.grabImpactTimer <= 0) return;
+    this.grabImpactTimer = Math.max(0, this.grabImpactTimer - dt);
+    if (this.state === 'grabbed') {
+      this.x = this.grabberX + this.grabOffsetX + this.getGrabImpactOffset();
+    }
+  }
+
+  private getGrabImpactOffset(): number {
+    if (this.grabImpactTimer <= 0) return 0;
+    const t = this.grabImpactTimer / this.GRAB_FOLLOWUP_IMPACT_DURATION;
+    return this.grabImpactDirection * this.GRAB_FOLLOWUP_IMPACT_DISTANCE * t;
   }
   
   private updateAnimation(dt: number): void {
@@ -157,15 +196,16 @@ export class Player extends Entity {
   }
   
   private handleInput(): void {
-    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'kick' || this.state === 'death' || this.state === 'down' || this.state === 'downhit' || this.state === 'getup') return;
+    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'kick' || this.state === 'death' || this.state === 'down' || this.state === 'downhit' || this.state === 'getup' || this.state === 'grabbed') return;
     
     // Horizontal movement
+    const moveSpeed = this.isLowHealth ? this.MOVE_SPEED * this.LOW_HEALTH_MOVE_SPEED_MULTIPLIER : this.MOVE_SPEED;
     if (this.inputState.left) {
-      this.velocityX = -this.MOVE_SPEED;
+      this.velocityX = -moveSpeed;
       this.facing = -1;
       if (this.onGround) this.setState('walk');
     } else if (this.inputState.right) {
-      this.velocityX = this.MOVE_SPEED;
+      this.velocityX = moveSpeed;
       this.facing = 1;
       if (this.onGround) this.setState('walk');
     } else {
@@ -224,7 +264,7 @@ export class Player extends Entity {
           if (this.health <= 0) {
             this.announceGameOver();
           } else {
-            this.recoveryTimer = this.DOWN_RECOVERY_DURATION;
+            this.recoveryTimer = this.getDownRecoveryDuration();
           }
           return;
         } else if (this.state === 'hurt' && this.currentHitReaction === 'guardHead') {
@@ -234,6 +274,9 @@ export class Player extends Entity {
           this.velocityX = 0;
           this.velocityY = 0;
           this.setState('idle');
+          return;
+        } else if (this.state === 'grabbed') {
+          this.releaseGrab();
           return;
         }
         this.velocityX = 0;
@@ -321,8 +364,9 @@ export class Player extends Entity {
   }
 
   public hurt(fromX?: number, reaction: HitReactionType = 'light'): void {
+    if (this.state === 'grabbed') return;
     this.setState('hurt');
-    this.stateTimer = HURT_STUN_BY_REACTION[reaction];
+    this.stateTimer = HURT_STUN_BY_REACTION[reaction] + (this.isLowHealth ? LOW_HEALTH_HURT_STUN_BONUS : 0);
     this.currentHitReaction = reaction;
     this.recoveryTimer = 0;
     this.animTimer = 0;
@@ -337,12 +381,99 @@ export class Player extends Entity {
     }
   }
 
+  public startGrabbed(grabberX: number): void {
+    if (!this.canBeGrabbed) return;
+    this.grabberX = grabberX;
+    this.grabOffsetX = grabberX > this.x ? -42 : 42;
+    this.facing = grabberX > this.x ? 1 : -1;
+    this.setState('grabbed');
+    this.stateTimer = 0;
+    this.recoveryTimer = 0;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.animTimer = 0;
+    this.currentFrame = HURT_FRAME_BY_REACTION.guardHead;
+    this.hurtDrawScale = 1;
+    this.followupGrabberX = null;
+    this.grabImpactTimer = 0;
+    this.grabImpactDirection = 0;
+  }
+
+  public updateGrabbedPosition(grabberX: number): void {
+    if (this.state !== 'grabbed') return;
+    this.grabberX = grabberX;
+    this.x = grabberX + this.grabOffsetX + this.getGrabImpactOffset();
+    this.velocityX = 0;
+    this.velocityY = 0;
+  }
+
+  public applyGrabDamage(amount: number): void {
+    if (this.state !== 'grabbed' || DebugFlags.noPlayerHpDamage || this.health <= 0) return;
+    this.health = Math.max(0, this.health - amount);
+    if (this.health <= 0) this.die(this.grabberX);
+  }
+
+  public startGrabFollowup(grabberX: number): boolean {
+    if (this.state !== 'grabbed' || this.followupGrabberX !== null || this.health <= 0) return false;
+    this.followupGrabberX = grabberX;
+    return true;
+  }
+
+  public updateGrabFollowupPosition(grabberX: number): void {
+    if (this.state !== 'grabbed' || this.followupGrabberX === null) return;
+    this.followupGrabberX = grabberX;
+  }
+
+  public finishGrabFollowup(): void {
+    this.followupGrabberX = null;
+  }
+
+  public receiveGrabFollowupHit(fromX: number, damage: number): void {
+    if (!this.isDoubleGrabbed || this.health <= 0) return;
+    this.grabImpactDirection = fromX > this.x ? -1 : 1;
+    this.grabImpactTimer = this.GRAB_FOLLOWUP_IMPACT_DURATION;
+    if (!DebugFlags.noPlayerHpDamage) {
+      this.health = Math.max(0, this.health - damage);
+      if (this.health <= 0) {
+        this.die(fromX);
+        return;
+      }
+    }
+  }
+
+  public finishGrab(fromX: number): void {
+    if (this.state !== 'grabbed') return;
+    this.followupGrabberX = null;
+    this.currentDownHitReaction = 'back';
+    const presentation = DOWN_HIT_PRESENTATION.back;
+    this.setState('downhit');
+    this.stateTimer = presentation.stun;
+    this.recoveryTimer = 0;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.velocityX = fromX > this.x ? -presentation.knockback : presentation.knockback;
+    this.velocityY = 0;
+    this.facing = fromX > this.x ? 1 : -1;
+  }
+
+  public releaseGrab(): void {
+    if (this.state !== 'grabbed') return;
+    this.followupGrabberX = null;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.setState('idle');
+  }
+
   private enterDownedRecovery(): void {
     this.setState('down');
     this.stateTimer = 0;
-    this.recoveryTimer = this.DOWN_RECOVERY_DURATION;
+    this.recoveryTimer = this.getDownRecoveryDuration();
     this.velocityX = 0;
     this.velocityY = 0;
+  }
+
+  private getDownRecoveryDuration(): number {
+    return this.isLowHealth ? this.LOW_HEALTH_DOWN_RECOVERY_DURATION : this.DOWN_RECOVERY_DURATION;
   }
 
   private startGetup(): void {
@@ -371,6 +502,9 @@ export class Player extends Entity {
   }
 
   getHurtHitbox(): HitboxRect {
+    if (this.state === 'down' || this.state === 'downhit') {
+      return resolveFacingHitbox(this, this.DOWNED_HURT_HITBOX, this.facing);
+    }
     return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.hurt, this.facing);
   }
   
@@ -397,8 +531,9 @@ export class Player extends Entity {
     ctx.translate(this.x + this.width / 2, 0);
     ctx.scale(this.facing, 1);
 
-    if (this.state === 'idle' && this.idleImage) {
-      ctx.drawImage(this.idleImage, -this.width / 2, this.y, this.width, this.height);
+    if (this.state === 'idle' && (this.idleImage || this.pinchIdleImage)) {
+      const idle = this.isLowHealth && this.pinchIdleImage ? this.pinchIdleImage : this.idleImage;
+      if (idle) ctx.drawImage(idle, -this.width / 2, this.y, this.width, this.height);
     } else if (this.state === 'walk' && this.spriteImage) {
       const sx = this.currentFrame * this.FRAME_WIDTH;
       ctx.drawImage(
@@ -433,6 +568,17 @@ export class Player extends Entity {
         -this.width * s / 2, this.y - this.height * (s - 1),
         this.width * s, this.height * s,
       );
+    } else if (this.state === 'grabbed' && (this.grabbedImage || this.hurtImage)) {
+      if (this.grabbedImage) {
+        ctx.drawImage(this.grabbedImage, -this.width / 2, this.y, this.width, this.height);
+      } else if (this.hurtImage) {
+        const sx = HURT_FRAME_BY_REACTION.guardHead * this.FRAME_WIDTH;
+        ctx.drawImage(
+          this.hurtImage,
+          sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+          -this.width / 2, this.y, this.width, this.height,
+        );
+      }
     } else if (this.state === 'down' && this.downImage) {
       this.drawGroundedSprite(ctx, this.downImage, this.DOWN_SOURCE, this.DOWN_DRAW_WIDTH, this.DOWN_DRAW_HEIGHT);
     } else if (this.state === 'downhit' && this.downHitImage) {

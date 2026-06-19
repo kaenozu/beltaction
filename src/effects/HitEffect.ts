@@ -10,7 +10,7 @@ import { Entity } from '../engine/Game';
 export class HitEffect extends Entity {
   private timer: number = 0.25;
 
-  constructor(x: number, y: number) {
+  constructor(x: number, y: number, public readonly overlay: boolean = false) {
     super(x, y);
   }
 

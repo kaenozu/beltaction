@@ -5,11 +5,13 @@ import { StageManager } from './stages/StageManager';
 import { SpawnSystem } from './systems/SpawnSystem';
 import { DebugFlags } from './systems/DebugFlags';
 import idleUrl from '/assets/maki_idle_generated_v2_despill.png';
+import pinchIdleUrl from '/assets/maki_pinch_idle_generated_despill.png';
 import walkUrl from '/assets/maki_walk_hairsway_stabilized_despill.png';
 import attackUrl from '/assets/maki_attack_generated_despill_hairfix.png';
 import kickUrl from '/assets/maki_kick_generated_despill.png';
 import jumpUrl from '/assets/maki_jump_generated_despill.png';
 import hurtUrl from '/assets/maki_hurt_generated_despill.png';
+import grabbedUrl from '/assets/maki_hagai_victim_generated_fit.png';
 import deathUrl from '/assets/maki_death_generated_despill.png';
 import downUrl from '/assets/maki_down_generated_despill.png';
 import downHitUrl from '/assets/maki_downhit_generated_despill.png';
@@ -17,6 +19,7 @@ import getupUrl from '/assets/maki_getup_generated_despill.png';
 import gruntUrl from '/assets/grunt_spritesheet_generated_despill.png';
 import gruntHurtUrl from '/assets/grunt_hurt_generated_despill.png';
 import gruntHeavyUrl from '/assets/grunt_heavy_generated_despill.png';
+import gruntBodyBlowUrl from '/assets/grunt_bodyblow_generated_despill.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -39,6 +42,12 @@ const idleImg = new Image();
 idleImg.src = idleUrl;
 idleImg.onload = () => {
   player.idleImage = idleImg;
+};
+
+const pinchIdleImg = new Image();
+pinchIdleImg.src = pinchIdleUrl;
+pinchIdleImg.onload = () => {
+  player.pinchIdleImage = pinchIdleImg;
 };
 
 const walkSheet = new Image();
@@ -69,6 +78,12 @@ const hurtImg = new Image();
 hurtImg.src = hurtUrl;
 hurtImg.onload = () => {
   player.hurtImage = hurtImg;
+};
+
+const grabbedImg = new Image();
+grabbedImg.src = grabbedUrl;
+grabbedImg.onload = () => {
+  player.grabbedImage = grabbedImg;
 };
 
 const deathImg = new Image();
@@ -113,6 +128,12 @@ gruntHeavySheet.onload = () => {
   spawner.heavyAttackImage = gruntHeavySheet;
 };
 
+const gruntBodyBlowSheet = new Image();
+gruntBodyBlowSheet.src = gruntBodyBlowUrl;
+gruntBodyBlowSheet.onload = () => {
+  spawner.bodyBlowImage = gruntBodyBlowSheet;
+};
+
 game.setBackground(stage);
 
 player.onDeath = () => {
@@ -131,9 +152,10 @@ function updateInputs(): void {
   const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';
   const postGameAttackInfo = DebugFlags.allowPostGameOverAttacks ? ' [POST-HIT]' : '';
   const noDamageInfo = DebugFlags.noPlayerHpDamage ? ' [NO-DMG]' : '';
+  const dangerInfo = player.isLowHealth ? ' DANGER' : '';
   hud.textContent = player.isGameOver
     ? `GAME OVER - Refresh to restart${debugInfo}${postGameAttackInfo}${noDamageInfo}`
-    : `HP: ${player.health}${enemyHP}${debugInfo}${postGameAttackInfo}${noDamageInfo}`;
+    : `HP: ${player.health}${dangerInfo}${enemyHP}${debugInfo}${postGameAttackInfo}${noDamageInfo}`;
   requestAnimationFrame(updateInputs);
 }
 updateInputs();
