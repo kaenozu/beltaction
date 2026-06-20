@@ -7,7 +7,7 @@ describe('ChainEnemy', () => {
   let enemy: ChainEnemy;
 
   beforeEach(() => {
-    player = new Player(300, 288, 'Maki');
+    player = new Player(300, 288);
     enemy = new ChainEnemy(100, 288, () => player);
   });
 

@@ -142,7 +142,7 @@ export class Player extends Entity {
     return this.health <= 0 && this.gameOverAnnounced && (this.state === 'down' || this.state === 'downhit');
   }
   
-  constructor(x: number, y: number, private name: string) {
+  constructor(x: number, y: number) {
     super(x, y);
     this.width = this.frameWidth;
     this.height = this.frameHeight;
