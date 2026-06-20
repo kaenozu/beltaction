@@ -7,7 +7,7 @@ describe('Enemy', () => {
   let enemy: Enemy;
 
   beforeEach(() => {
-    player = new Player(300, 288, 'Maki');
+    player = new Player(300, 288);
     player.setInput({
       up: false, down: false, left: false, right: false,
       attack: false, kick: false,

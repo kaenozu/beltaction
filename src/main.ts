@@ -37,7 +37,7 @@ const game = new Game(canvas);
 const input = new InputManager();
 const stage = new StageManager();
 
-const player = new Player(100, 300, 'Maki');
+const player = new Player(100, 300);
 const spawner = new SpawnSystem(
   () => player,
   (duration = 0.06, shakeDuration = 0, shakeMagnitude = 0) => {

@@ -6,7 +6,9 @@
  */
 
 import { Entity } from '../engine/Entity';
-import { DownHitReactionType, HitReactionType, Player } from './Player';
+import { Player } from './Player';
+import { type DownHitReactionType, type HitReactionType } from './PlayerTypes';
+import { EnemyRenderer } from './EnemyRenderer';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
@@ -42,7 +44,7 @@ export class Enemy extends Entity {
   private readonly TOO_CLOSE_RANGE = 24;
   private readonly FLANK_DISTANCE = 58;
   private readonly FLANK_SPEED = 105;
-  private state: EnemyState = 'walk';
+  public state: EnemyState = 'walk';
   private stateTimer: number = 0;
   private attackCooldown: number = 0;
   private grabCooldown: number = 1.2;
@@ -58,8 +60,8 @@ export class Enemy extends Entity {
   private flankTargetX: number | null = null;
   private readonly BEHAVIOR_WALK_DURATION = 1.5;
   private readonly BEHAVIOR_IDLE_DURATION = 0.8;
-  private facing: number = -1;
-  private currentFrame: number = 0;
+  public facing: number = -1;
+  public currentFrame: number = 0;
   private animTimer: number = 0;
   private readonly ANIM_SPEED = 0.25;
   
@@ -75,16 +77,17 @@ export class Enemy extends Entity {
   get isBodyBlowGrappler(): boolean { return this.state === 'grabFollowup'; }
   get isGrapplingPlayer(): boolean { return this.state === 'grab' || this.state === 'grabFollowup'; }
   private targetX: number | null = null;
-  private readonly FRAME_WIDTH = 160;
-  private readonly FRAME_HEIGHT = 192;
+  public readonly frameWidth = 160;
+  public readonly frameHeight = 192;
   private readonly HEAVY_ATTACK_HITBOX: HitboxRect = { x: 88, y: 78, w: 54, h: 34 };
   private hitboxConfig: HitboxConfig = GRUNT_HITBOX;
   
   constructor(x: number, y: number, private player: () => Player) {
     super(x, y);
-    this.width = this.FRAME_WIDTH;
-    this.height = this.FRAME_HEIGHT;
+    this.width = this.frameWidth;
+    this.height = this.frameHeight;
   }
+  private enemyRenderer = new EnemyRenderer(this);
   
   override update(dt: number): void {
     const player = this.player();
@@ -498,195 +501,6 @@ export class Enemy extends Entity {
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
-    this.drawShadow(ctx);
-
-    if (!this.spriteImage) {
-      ctx.fillStyle = '#777';
-      ctx.fillRect(this.x, this.y, this.width, this.height);
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-      return;
-    }
-    
-    ctx.save();
-    ctx.translate(this.x + this.width / 2, 0);
-    // Sprite faces left; flip scale based on direction
-    ctx.scale(-this.facing, 1);
-    
-    if (this.state === 'death' && this.hurtImage) {
-      ctx.drawImage(
-        this.hurtImage,
-        this.FRAME_WIDTH, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
-      ctx.restore();
-      return;
-    }
-
-    if (this.state === 'hurt' && this.hurtImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
-      ctx.drawImage(
-        this.hurtImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-      this.renderDebugHitboxes(ctx);
-      return;
-    }
-
-    if (this.state === 'heavyAttack' && this.heavyAttackImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
-      ctx.drawImage(
-        this.heavyAttackImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-      this.renderDebugHitboxes(ctx);
-      return;
-    }
-
-    if (this.state === 'bodyBlow' && this.bodyBlowImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
-      ctx.scale(-1, 1);
-      const drawScale = 0.9;
-      const drawW = this.width * drawScale;
-      const drawH = this.height * drawScale;
-      const drawY = this.y + this.height - drawH;
-      ctx.drawImage(
-        this.bodyBlowImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -drawW / 2, drawY, drawW, drawH,
-      );
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-      this.renderDebugHitboxes(ctx);
-      return;
-    }
-
-    if (this.state === 'downAttack' && (this.heavyAttackImage || this.bodyBlowImage)) {
-      const image = this.heavyAttackImage ?? this.bodyBlowImage;
-      if (image) {
-        const sx = this.currentFrame * this.FRAME_WIDTH;
-        const drawScale = 0.92;
-        const drawW = this.width * drawScale;
-        const drawH = this.height * drawScale;
-        const drawY = this.y + this.height - drawH;
-        ctx.drawImage(
-          image,
-          sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-          -drawW / 2, drawY, drawW, drawH,
-        );
-      }
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-      this.renderDebugHitboxes(ctx);
-      return;
-    }
-
-    if (this.state === 'grab') {
-      const sx = 0;
-      ctx.drawImage(
-        this.spriteImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-      this.renderDebugHitboxes(ctx);
-      return;
-    }
-
-    if (this.state === 'grabFollowup') {
-      const image = this.bodyBlowImage ?? this.spriteImage;
-      const sx = this.bodyBlowImage
-        ? this.currentFrame * this.FRAME_WIDTH
-        : (3 + this.currentFrame) * this.FRAME_WIDTH;
-      if (this.bodyBlowImage) ctx.scale(-1, 1);
-      const drawScale = this.bodyBlowImage ? 0.9 : 1;
-      const drawW = this.width * drawScale;
-      const drawH = this.height * drawScale;
-      const drawY = this.y + this.height - drawH;
-      ctx.drawImage(
-        image,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -drawW / 2, drawY, drawW, drawH,
-      );
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-      this.renderDebugHitboxes(ctx);
-      return;
-    }
-
-    // Map state to frame index
-    let frameIdx = 0;
-    if (this.state === 'idle') frameIdx = 0;
-    else if (this.state === 'walk') frameIdx = 1 + this.currentFrame;
-    else if (this.state === 'attack') frameIdx = 3 + this.currentFrame;
-    else if (this.state === 'hurt') frameIdx = 0;
-    
-    const sx = frameIdx * this.FRAME_WIDTH;
-    ctx.drawImage(
-      this.spriteImage,
-      sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-      -this.width / 2, this.y, this.width, this.height,
-    );
-    
-    ctx.globalAlpha = 1;
-    
-    ctx.restore();
-    
-    ctx.fillStyle = '#fff';
-    ctx.font = '10px monospace';
-    ctx.fillText(`HP:${this.health}`, this.x, this.y - 5);
-    
-    this.renderDebugHitboxes(ctx);
-  }
-
-  private renderDebugHitboxes(ctx: CanvasRenderingContext2D): void {
-    if (DebugFlags.showHitboxes) {
-      ctx.strokeStyle = '#f00';
-      ctx.lineWidth = 1;
-      const body = this.getBodyHitbox();
-      ctx.strokeRect(body.x, body.y, body.w, body.h);
-
-      ctx.strokeStyle = '#0ff';
-      const hurt = this.getHurtHitbox();
-      ctx.strokeRect(hurt.x, hurt.y, hurt.w, hurt.h);
-
-      const atk = this.getAttackHitbox();
-      if (atk) {
-        ctx.strokeStyle = '#f80';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
-      }
-    }
-  }
-
-  private drawShadow(ctx: CanvasRenderingContext2D): void {
-    const groundY = this.y + this.height - 8;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
-    ctx.beginPath();
-    ctx.ellipse(this.x + this.width / 2, groundY, 48, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    this.enemyRenderer.render(ctx);
   }
 }

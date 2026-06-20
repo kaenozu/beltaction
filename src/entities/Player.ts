@@ -9,49 +9,19 @@ import { Entity } from '../engine/Entity';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
+import {
+  type HitReactionType,
+  type DownHitReactionType,
+  HURT_FRAME_BY_REACTION,
+  HURT_STUN_BY_REACTION,
+  LOW_HEALTH_HURT_STUN_BONUS,
+  HURT_KNOCKBACK_BY_REACTION,
+  HURT_DRAW_SCALE_BY_REACTION,
+  DOWN_HIT_PRESENTATION,
+} from './PlayerTypes';
+import { PlayerRenderer } from './PlayerRenderer';
 
-export type HitReactionType = 'light' | 'guardHead' | 'bodyBlow';
-export type DownHitReactionType = 'body' | 'back' | 'launch';
-
-const HURT_FRAME_BY_REACTION: Record<HitReactionType, number> = {
-  light: 0,
-  guardHead: 1,
-  bodyBlow: 1,
-};
-
-const HURT_STUN_BY_REACTION: Record<HitReactionType, number> = {
-  light: 0.22,
-  guardHead: 0.48,
-  bodyBlow: 0.58,
-};
-
-const LOW_HEALTH_HURT_STUN_BONUS = 0.08;
-
-const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
-  light: 95,
-  guardHead: 220,
-  bodyBlow: 72,
-};
-
-const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
-  light: 1.04,
-  guardHead: 1.04,
-  bodyBlow: 1.08,
-};
-
-type GroundHitPresentation = {
-  stun: number;
-  knockback: number;
-  drawOffsetX: number;
-  drawOffsetY: number;
-  drawScale: number;
-};
-
-const DOWN_HIT_PRESENTATION: Record<DownHitReactionType, GroundHitPresentation> = {
-  body: { stun: 0.38, knockback: 54, drawOffsetX: 0, drawOffsetY: 0, drawScale: 1 },
-  back: { stun: 0.44, knockback: 72, drawOffsetX: -6, drawOffsetY: -3, drawScale: 1.03 },
-  launch: { stun: 0.5, knockback: 92, drawOffsetX: 8, drawOffsetY: -8, drawScale: 1.06 },
-};
+export type { HitReactionType, DownHitReactionType };
 
 export class Player extends Entity {
   private inputState!: InputState;
@@ -59,7 +29,7 @@ export class Player extends Entity {
   public velocityX: number = 0;
   public velocityY: number = 0;
   private onGround: boolean = true;
-  private facing: number = 1;
+  public facing: number = 1;
   state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' | 'getup' | 'grabbed' | 'bound' = 'idle';
 
   private setState(s: typeof this.state): void {
@@ -76,7 +46,7 @@ export class Player extends Entity {
   private wakeupInvincibleTimer: number = 0;
   private gameOverAnnounced: boolean = false;
   private currentHitReaction: HitReactionType = 'light';
-  private currentDownHitReaction: DownHitReactionType = 'body';
+  public currentDownHitReaction: DownHitReactionType = 'body';
   private grabberX: number = 0;
   private grabOffsetX: number = 0;
   private followupGrabberX: number | null = null;
@@ -123,9 +93,9 @@ export class Player extends Entity {
   public downImage: HTMLImageElement | null = null;
   public downHitImage: HTMLImageElement | null = null;
   public getupImage: HTMLImageElement | null = null;
-  private readonly FRAME_WIDTH = 160;
-  private readonly FRAME_HEIGHT = 192;
-  private readonly KICK_FRAME_WIDTH = 220;
+  public readonly frameWidth = 160;
+  public readonly frameHeight = 192;
+  public readonly kickFrameWidth = 220;
   currentFrame: number = 0;
   currentAttackKind: 'punch' | 'kick' | null = null;
   private animTimer: number = 0;
@@ -135,19 +105,19 @@ export class Player extends Entity {
   private readonly ANIM_SPEED = 0.15;
   private prevAttack: boolean = false;
   private prevKick: boolean = false;
-  private rapidCount: number = 0;
-  private hurtDrawScale: number = 1.1;
+  public rapidCount: number = 0;
+  public hurtDrawScale: number = 1.1;
   /** attack/kick開始時のstateTimerを保存（アニメーションのフレーム閾値に使う） */
   private attackDuration: number = 0;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
   private readonly KICK_HITBOX: HitboxRect = { x: 116, y: 58, w: 64, h: 34 };
   private readonly DOWNED_HURT_HITBOX: HitboxRect = { x: -24, y: 72, w: 208, h: 120 };
-  private readonly DOWN_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
-  private readonly DOWN_HIT_SOURCE = { x: 0, y: 0, w: 320, h: 192 };
-  private readonly DOWN_DRAW_WIDTH = 224;
-  private readonly DOWN_HIT_DRAW_WIDTH = 208;
-  private readonly DOWN_DRAW_HEIGHT = 134;
-  private readonly DOWN_HIT_DRAW_HEIGHT = 125;
+  public readonly downSource = { x: 0, y: 0, w: 320, h: 192 };
+  public readonly downHitSource = { x: 0, y: 0, w: 320, h: 192 };
+  public readonly downDrawWidth = 224;
+  public readonly downHitDrawWidth = 208;
+  public readonly downDrawHeight = 134;
+  public readonly downHitDrawHeight = 125;
   get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
   get isGameOver(): boolean { return this.gameOverAnnounced; }
   get isLowHealth(): boolean { return this.health > 0 && this.health <= this.LOW_HEALTH_THRESHOLD; }
@@ -173,11 +143,12 @@ export class Player extends Entity {
     return this.health <= 0 && this.gameOverAnnounced && (this.state === 'down' || this.state === 'downhit');
   }
   
-  constructor(x: number, y: number, private name: string) {
+  constructor(x: number, y: number) {
     super(x, y);
-    this.width = this.FRAME_WIDTH;
-    this.height = this.FRAME_HEIGHT;
+    this.width = this.frameWidth;
+    this.height = this.frameHeight;
   }
+  private playerRenderer = new PlayerRenderer(this);
 
   restart(x: number, y: number): void {
     this.x = x;
@@ -683,158 +654,6 @@ export class Player extends Entity {
   }
   
   override render(ctx: CanvasRenderingContext2D): void {
-    this.drawShadow(ctx);
-
-    ctx.save();
-    ctx.translate(this.x + this.width / 2, 0);
-    ctx.scale(this.facing, 1);
-
-    this.renderSprite(ctx);
-
-    ctx.restore();
-
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px monospace';
-    ctx.fillText(`${this.state.toUpperCase()} [${this.currentFrame}] r=${this.rapidCount}`, this.x, this.y - 5);
-
-    this.renderDebugHitboxes(ctx);
-  }
-
-  private renderSprite(ctx: CanvasRenderingContext2D): void {
-    if (this.state === 'idle' && (this.idleImage || this.pinchIdleImage)) {
-      const idle = this.isLowHealth && this.pinchIdleImage ? this.pinchIdleImage : this.idleImage;
-      if (idle) ctx.drawImage(idle, -this.width / 2, this.y, this.width, this.height);
-    } else if (this.state === 'walk' && this.spriteImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
-      ctx.drawImage(
-        this.spriteImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
-    } else if (this.state === 'attack' && this.attackImage) {
-      this.renderFrameSprite(ctx, this.attackImage, this.currentFrame * this.FRAME_WIDTH);
-    } else if (this.state === 'kick' && this.kickImage) {
-      const sx = this.currentFrame * this.KICK_FRAME_WIDTH;
-      ctx.drawImage(
-        this.kickImage,
-        sx, 0, this.KICK_FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.KICK_FRAME_WIDTH / 2, this.y, this.KICK_FRAME_WIDTH, this.height,
-      );
-    } else if (this.state === 'jump' && this.jumpImage) {
-      ctx.drawImage(this.jumpImage, -this.width / 2, this.y, this.width, this.height);
-    } else if (this.state === 'death' && this.deathImage) {
-      ctx.drawImage(this.deathImage, -this.width / 2, this.y, this.width, this.height);
-    } else if (this.state === 'hurt' && this.hurtImage) {
-      this.renderHurtSprite(ctx);
-    } else if ((this.state === 'grabbed' || this.state === 'bound') && (this.grabbedImage || this.hurtImage)) {
-      this.renderGrabbedSprite(ctx);
-    } else if (this.state === 'down' && this.downImage) {
-      this.drawGroundedSprite(ctx, this.downImage, this.DOWN_SOURCE, this.DOWN_DRAW_WIDTH, this.DOWN_DRAW_HEIGHT);
-    } else if (this.state === 'downhit' && this.downHitImage) {
-      this.renderDownHitSprite(ctx);
-    } else if (this.state === 'getup' && this.getupImage) {
-      this.renderFrameSprite(ctx, this.getupImage, this.currentFrame * this.FRAME_WIDTH);
-    } else if (this.idleImage) {
-      ctx.drawImage(this.idleImage, -this.width / 2, this.y, this.width, this.height);
-    } else {
-      ctx.fillStyle = this.name === 'Maki' ? '#ff6b6b' : '#4dabf7';
-      ctx.fillRect(-this.width / 2, this.y, this.width, this.height);
-    }
-  }
-
-  private renderFrameSprite(ctx: CanvasRenderingContext2D, image: HTMLImageElement, sx: number): void {
-    ctx.drawImage(
-      image,
-      sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-      -this.width / 2, this.y, this.width, this.height,
-    );
-  }
-
-  private renderHurtSprite(ctx: CanvasRenderingContext2D): void {
-    const sx = this.currentFrame * this.FRAME_WIDTH;
-    const s = this.hurtDrawScale;
-    ctx.drawImage(
-      this.hurtImage!,
-      sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-      -this.width * s / 2, this.y - this.height * (s - 1),
-      this.width * s, this.height * s,
-    );
-  }
-
-  private renderGrabbedSprite(ctx: CanvasRenderingContext2D): void {
-    if (this.grabbedImage) {
-      ctx.drawImage(this.grabbedImage, -this.width / 2, this.y, this.width, this.height);
-    } else if (this.hurtImage) {
-      const sx = HURT_FRAME_BY_REACTION.guardHead * this.FRAME_WIDTH;
-      ctx.drawImage(
-        this.hurtImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
-    }
-  }
-
-  private renderDownHitSprite(ctx: CanvasRenderingContext2D): void {
-    const presentation = DOWN_HIT_PRESENTATION[this.currentDownHitReaction];
-    this.drawGroundedSprite(
-      ctx,
-      this.downHitImage!,
-      this.DOWN_HIT_SOURCE,
-      this.DOWN_HIT_DRAW_WIDTH * presentation.drawScale,
-      this.DOWN_HIT_DRAW_HEIGHT * presentation.drawScale,
-      presentation.drawOffsetX,
-      presentation.drawOffsetY,
-    );
-  }
-
-  private renderDebugHitboxes(ctx: CanvasRenderingContext2D): void {
-    if (!DebugFlags.showHitboxes) return;
-    ctx.strokeStyle = '#0f0';
-    ctx.lineWidth = 1;
-    const body = this.getBodyHitbox();
-    ctx.strokeRect(body.x, body.y, body.w, body.h);
-
-    ctx.strokeStyle = '#0ff';
-    const hurt = this.getHurtHitbox();
-    ctx.strokeRect(hurt.x, hurt.y, hurt.w, hurt.h);
-
-    const atk = this.getAttackHitbox();
-    if (atk) {
-      ctx.strokeStyle = '#f80';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
-    }
-  }
-
-  private drawGroundedSprite(
-    ctx: CanvasRenderingContext2D,
-    image: HTMLImageElement,
-    source: { x: number; y: number; w: number; h: number },
-    drawWidth: number,
-    drawHeight: number,
-    offsetX: number = 0,
-    offsetY: number = 0,
-  ): void {
-    ctx.drawImage(
-      image,
-      source.x, source.y, source.w, source.h,
-      -drawWidth / 2 + offsetX, this.y + this.height - drawHeight + offsetY,
-      drawWidth, drawHeight,
-    );
-  }
-
-  private drawShadow(ctx: CanvasRenderingContext2D): void {
-    const groundY = this.y + this.height - 8;
-    const isDown = this.state === 'down' || this.state === 'downhit';
-    const shadowW = isDown ? 158 : 104;
-    const shadowH = isDown ? 12 : 14;
-    const alpha = this.state === 'jump' ? 0.08 : 0.16;
-
-    ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-    ctx.beginPath();
-    ctx.ellipse(this.x + this.width / 2, groundY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    this.playerRenderer.render(ctx);
   }
 }
