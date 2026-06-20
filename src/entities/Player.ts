@@ -9,49 +9,19 @@ import { Entity } from '../engine/Entity';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
+import {
+  type HitReactionType,
+  type DownHitReactionType,
+  type GroundHitPresentation,
+  HURT_FRAME_BY_REACTION,
+  HURT_STUN_BY_REACTION,
+  LOW_HEALTH_HURT_STUN_BONUS,
+  HURT_KNOCKBACK_BY_REACTION,
+  HURT_DRAW_SCALE_BY_REACTION,
+  DOWN_HIT_PRESENTATION,
+} from './PlayerTypes';
 
-export type HitReactionType = 'light' | 'guardHead' | 'bodyBlow';
-export type DownHitReactionType = 'body' | 'back' | 'launch';
-
-const HURT_FRAME_BY_REACTION: Record<HitReactionType, number> = {
-  light: 0,
-  guardHead: 1,
-  bodyBlow: 1,
-};
-
-const HURT_STUN_BY_REACTION: Record<HitReactionType, number> = {
-  light: 0.22,
-  guardHead: 0.48,
-  bodyBlow: 0.58,
-};
-
-const LOW_HEALTH_HURT_STUN_BONUS = 0.08;
-
-const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
-  light: 95,
-  guardHead: 220,
-  bodyBlow: 72,
-};
-
-const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
-  light: 1.04,
-  guardHead: 1.04,
-  bodyBlow: 1.08,
-};
-
-type GroundHitPresentation = {
-  stun: number;
-  knockback: number;
-  drawOffsetX: number;
-  drawOffsetY: number;
-  drawScale: number;
-};
-
-const DOWN_HIT_PRESENTATION: Record<DownHitReactionType, GroundHitPresentation> = {
-  body: { stun: 0.38, knockback: 54, drawOffsetX: 0, drawOffsetY: 0, drawScale: 1 },
-  back: { stun: 0.44, knockback: 72, drawOffsetX: -6, drawOffsetY: -3, drawScale: 1.03 },
-  launch: { stun: 0.5, knockback: 92, drawOffsetX: 8, drawOffsetY: -8, drawScale: 1.06 },
-};
+export type { HitReactionType, DownHitReactionType };
 
 export class Player extends Entity {
   private inputState!: InputState;

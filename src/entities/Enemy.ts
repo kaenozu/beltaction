@@ -6,7 +6,8 @@
  */
 
 import { Entity } from '../engine/Entity';
-import { DownHitReactionType, HitReactionType, Player } from './Player';
+import { Player } from './Player';
+import { type DownHitReactionType, type HitReactionType } from './PlayerTypes';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
