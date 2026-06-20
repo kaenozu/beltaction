@@ -461,19 +461,20 @@ export class Enemy extends Entity {
     }
   }
   
-  takeDamage(amount: number): void {
+  takeDamage(amount: number, fromX?: number): void {
     this.health -= amount;
+    const knockDir = fromX !== undefined ? (fromX > this.x ? 1 : -1) : this.facing;
     if (this.health <= 0) {
       this.state = 'death';
       this.stateTimer = 0.5;
-      this.velocityX = this.facing * -120;
+      this.velocityX = knockDir * -120;
       this.attackHit = false;
       this.onDeath?.(this.x + this.width / 2, this.y + this.height / 3);
       return;
     }
     this.state = 'hurt';
     this.stateTimer = 0.2;
-    this.velocityX = this.facing * -80;
+    this.velocityX = knockDir * -80;
   }
   
   /** Current attack hitbox in world coords, or null if not on strike frame */

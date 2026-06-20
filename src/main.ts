@@ -92,7 +92,46 @@ loadImages({
 game.setBackground(stage);
 
 player.onDeath = () => {
-  hud.textContent = 'GAME OVER - Refresh to restart';
+  hud.textContent = 'GAME OVER — press R to restart';
+};
+
+function buildHUDFlags(): string {
+  const flags: string[] = [];
+  if (DebugFlags.showHitboxes) flags.push('BOX');
+  if (DebugFlags.allowPostGameOverAttacks) flags.push('POST-HIT');
+  if (DebugFlags.noPlayerHpDamage) flags.push('NO-DMG');
+  return flags.length > 0 ? ` [${flags.join(' ')}]` : '';
+}
+
+game.drawUI = (ctx) => {
+  const barX = 10;
+  const barY = 10;
+  const barW = 180;
+  const barH = 14;
+  const hpRatio = Math.max(0, player.health / 100);
+
+  ctx.fillStyle = '#333';
+  ctx.fillRect(barX, barY, barW, barH);
+
+  const hpColor = hpRatio > 0.5 ? '#e04040' : hpRatio > 0.25 ? '#e09020' : '#e02020';
+  ctx.fillStyle = hpColor;
+  ctx.fillRect(barX + 1, barY + 1, (barW - 2) * hpRatio, barH - 2);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(`HP ${player.health}`, barX + 6, barY + 11);
+
+  const enemies = spawner.getEnemies();
+  const enemyLabel = enemies.length > 0 ? `Enemies: ${enemies.length}` : '';
+  ctx.fillStyle = '#ccc';
+  ctx.font = '11px monospace';
+  ctx.fillText(enemyLabel, barX, barY + 28);
+
+  if (player.isGameOver) {
+    ctx.fillStyle = '#f44';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('GAME OVER', barX, barY + 52);
+  }
 };
 
 game.addEntity(spawner);
@@ -102,33 +141,30 @@ game.onFrame = () => {
   player.setInput(input.getState('player1'));
   stage.setPosition(player.x);
   game.cameraX = stage.getScrollX();
-  const enemies = spawner.getEnemies();
-  const enemyHP = enemies.length > 0 ? ` Enemy:${enemies.length} HP:${enemies[0].health}` : '';
-  const debugInfo = DebugFlags.showHitboxes ? ' [BOX]' : '';
-  const postGameAttackInfo = DebugFlags.allowPostGameOverAttacks ? ' [POST-HIT]' : '';
-  const noDamageInfo = DebugFlags.noPlayerHpDamage ? ' [NO-DMG]' : '';
-  const invincibleInfo = player.isWakeupInvincible ? ' [INV]' : '';
-  const dangerInfo = player.isLowHealth ? ' DANGER' : '';
-  hud.textContent = player.isGameOver
-    ? `GAME OVER - Refresh to restart${debugInfo}${postGameAttackInfo}${noDamageInfo}`
-    : `HP: ${player.health}${dangerInfo}${enemyHP}${invincibleInfo}${debugInfo}${postGameAttackInfo}${noDamageInfo}`;
+  const flags = buildHUDFlags();
+  hud.textContent = flags;
 };
 
 game.start();
 
 // Debug
 document.addEventListener('keydown', (e) => {
-  // (削除: 被弾テストは1/2/3からスポーンに変更)
   if (e.key === 'b') DebugFlags.showHitboxes = !DebugFlags.showHitboxes;
   if (e.key === 'g') DebugFlags.allowPostGameOverAttacks = !DebugFlags.allowPostGameOverAttacks;
   if (e.key === 'i') DebugFlags.noPlayerHpDamage = !DebugFlags.noPlayerHpDamage;
+  if (e.key === 'r') {
+    game.restart();
+    player.restart(100, 300);
+    spawner.restart();
+    hud.textContent = '';
+  }
   const keyNum = parseInt(e.key);
   if (!isNaN(keyNum) && keyNum >= 1 && keyNum <= 9) {
     const kinds: Record<number, string> = {
       1: 'grunt',
       2: 'chain',
     };
-    const kind = kinds[keyNum] ?? 'grunt'; // 3-9 は将来の敵タイプ用
+    const kind = kinds[keyNum] ?? 'grunt';
     spawner.spawnEnemy(kind as any);
   }
 });

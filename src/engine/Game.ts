@@ -20,6 +20,7 @@ export class Game {
   private screenShakeMagnitude: number = 0;
   cameraX: number = 0;
   onFrame: (() => void) | null = null;
+  drawUI: ((ctx: CanvasRenderingContext2D) => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -43,6 +44,15 @@ export class Game {
 
   addEntity(entity: Entity): void {
     this.entities.push(entity);
+  }
+
+  restart(): void {
+    this.entities = this.entities.filter(e => e.persistOnRestart);
+    this.cameraX = 0;
+    this.hitStopTimer = 0;
+    this.screenShakeTimer = 0;
+    this.screenShakeDuration = 0;
+    this.screenShakeMagnitude = 0;
   }
 
   requestHitStop(duration: number): void {
@@ -108,6 +118,8 @@ export class Game {
       if (entity.active) entity.renderOverlay(this.ctx);
     }
     this.ctx.restore();
+
+    this.drawUI?.(this.ctx);
   }
 
   private getShakeOffset(): number {

@@ -127,6 +127,7 @@ export class Player extends Entity {
   private readonly FRAME_HEIGHT = 192;
   private readonly KICK_FRAME_WIDTH = 220;
   currentFrame: number = 0;
+  currentAttackKind: 'punch' | 'kick' | null = null;
   private animTimer: number = 0;
   private readonly WALK_FRAME_COUNT = 4;
   private readonly HURT_FRAME_COUNT = 2;
@@ -176,6 +177,31 @@ export class Player extends Entity {
     super(x, y);
     this.width = this.FRAME_WIDTH;
     this.height = this.FRAME_HEIGHT;
+  }
+
+  restart(x: number, y: number): void {
+    this.x = x;
+    this.y = y;
+    this.health = 100;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.onGround = true;
+    this.setState('idle');
+    this.stateTimer = 0;
+    this.recoveryTimer = 0;
+    this.downGraceTimer = 0;
+    this.downPressureHitCount = 0;
+    this.postGameGroundHitCount = 0;
+    this.forceGetupAfterDownHit = false;
+    this.wakeupInvincibleTimer = 0;
+    this.gameOverAnnounced = false;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.rapidCount = 0;
+    this.currentAttackKind = null;
+    this.grabImpactTimer = 0;
+    this.followupGrabberX = null;
+    this.active = true;
   }
   
   setInput(state: InputState): void {
@@ -260,6 +286,7 @@ export class Player extends Entity {
     this.prevAttack = this.inputState.attack;
     if (attackDown && this.onGround) {
       this.setState('attack');
+      this.currentAttackKind = 'punch';
       this.animTimer = 0;
       this.rapidCount++;
       // Each rapid press makes attack faster (0.3 → 0.15 min)
@@ -272,6 +299,7 @@ export class Player extends Entity {
     this.prevKick = this.inputState.kick;
     if (kickDown && this.onGround) {
       this.setState('kick');
+      this.currentAttackKind = 'kick';
       this.animTimer = 0;
       this.currentFrame = 0;
       this.stateTimer = 0.34;
@@ -288,6 +316,7 @@ export class Player extends Entity {
       if (this.stateTimer <= 0) {
         if (this.state === 'attack') {
           this.rapidCount = Math.max(0, this.rapidCount - 1);
+          this.currentAttackKind = null;
         } else if (this.state === 'death') {
           this.setState('down');
           this.velocityX = 0;
@@ -322,6 +351,7 @@ export class Player extends Entity {
           this.releaseBound();
           return;
         }
+        this.currentAttackKind = null;
         this.velocityX = 0;
         this.setState(this.onGround ? 'idle' : 'jump');
       }

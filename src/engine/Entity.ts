@@ -12,6 +12,7 @@ export class Entity {
   height: number = 48;
   active: boolean = true;
   zIndex: number = 0;
+  persistOnRestart: boolean = false;
 
   constructor(x: number = 0, y: number = 0) {
     this.x = x;

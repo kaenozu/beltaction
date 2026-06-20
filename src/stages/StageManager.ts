@@ -13,7 +13,8 @@ export class StageManager extends Entity {
   
   constructor() {
     super(0, 0);
-    this.active = true; // Always render
+    this.active = true;
+    this.persistOnRestart = true;
   }
   
   update(_dt: number): void {

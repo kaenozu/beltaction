@@ -114,7 +114,6 @@ export class SpawnSystem extends Entity {
   private checkPlayerAttack(): void {
     const player = this.getPlayer();
     
-    // Reset if player is not in an attack state
     if (player.state !== 'attack' && player.state !== 'kick') {
       this.playerAttackHits.clear();
       return;
@@ -122,6 +121,11 @@ export class SpawnSystem extends Entity {
     
     const atk = player.getAttackHitbox();
     if (!atk) return;
+
+    const isKick = player.currentAttackKind === 'kick';
+    const hitStopDuration = isKick ? 0.085 : 0.055;
+    const shakeDuration = isKick ? 0.12 : 0;
+    const shakeMagnitude = isKick ? 2.5 : 0;
 
     for (const enemy of this.enemies) {
       if (this.playerAttackHits.has(enemy)) continue;
@@ -132,12 +136,12 @@ export class SpawnSystem extends Entity {
         const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
         const top = Math.max(atk.y, hurt.y);
         const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
-        enemy.takeDamage(player.getAttackDamage());
+        enemy.takeDamage(player.getAttackDamage(), player.x);
         this.playerAttackHits.add(enemy);
         if (!enemy.isDead) {
           this.spawnHitEffect((left + right) / 2, (top + bottom) / 2);
         }
-        this.onHitStop(0.06);
+        this.onHitStop(hitStopDuration, shakeDuration, shakeMagnitude);
       }
     }
   }
@@ -209,6 +213,12 @@ export class SpawnSystem extends Entity {
     this.effects.push(new HitEffect(x, y, overlay));
   }
   
+  restart(): void {
+    this.enemies = [];
+    this.playerAttackHits.clear();
+    this.effects = [];
+  }
+
   getEnemies(): EnemyActor[] {
     return this.enemies.filter(enemy => enemy.active);
   }
