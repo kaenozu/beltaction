@@ -9,6 +9,7 @@ import { Entity } from '../engine/Entity';
 import { Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { GRUNT_HITBOX, HitboxConfig, HitboxRect, rectsOverlap, resolveFacingHitbox } from '../systems/HitboxConfig';
+import { ChainEnemyRenderer } from './ChainEnemyRenderer';
 
 type ChainEnemyState = 'idle' | 'walk' | 'chainShot' | 'boundPull' | 'lowSweep' | 'downDrag' | 'hurt' | 'death';
 
@@ -24,22 +25,22 @@ export class ChainEnemy extends Entity {
   public onHitStop: ((duration: number, shakeDuration?: number, shakeMagnitude?: number) => void) | null = null;
   public onDeath: ((x: number, y: number) => void) | null = null;
 
-  private state: ChainEnemyState = 'walk';
+  public state: ChainEnemyState = 'walk';
   private stateTimer: number = 0;
   private velocityX: number = 0;
   private attackCooldown: number = 1.0;
   private chainCooldown: number = 1.4;
   private attackHit: boolean = false;
   private targetX: number | null = null;
-  private facing: number = -1;
-  private currentFrame: number = 0;
-  private animTimer: number = 0;
+  public facing: number = -1;
+  public currentFrame: number = 0;
+  public animTimer: number = 0;
   private attackDuration: number = 0;
-  private chainTargetX: number = 0;
-  private chainTargetY: number = 0;
-  private readonly FRAME_WIDTH = 160;
-  private readonly SPRITE_FRAME_WIDTH = 220;
-  private readonly FRAME_HEIGHT = 192;
+  public chainTargetX: number = 0;
+  public chainTargetY: number = 0;
+  public readonly frameWidth = 160;
+  public readonly spriteFrameWidth = 220;
+  public readonly frameHeight = 192;
   private readonly MOVE_SPEED = 72;
   private readonly STOP_RANGE = 150;
   private readonly CHAIN_MIN_RANGE = 112;
@@ -64,9 +65,10 @@ export class ChainEnemy extends Entity {
 
   constructor(x: number, y: number, private player: () => Player) {
     super(x, y);
-    this.width = this.FRAME_WIDTH;
-    this.height = this.FRAME_HEIGHT;
+    this.width = this.frameWidth;
+    this.height = this.frameHeight;
   }
+  private chainRenderer = new ChainEnemyRenderer(this);
 
   override update(dt: number): void {
     const player = this.player();
@@ -168,34 +170,7 @@ export class ChainEnemy extends Entity {
   }
 
   override render(ctx: CanvasRenderingContext2D): void {
-    this.drawShadow(ctx);
-
-    if (!this.spriteImage) {
-      ctx.fillStyle = '#465842';
-      ctx.fillRect(this.x, this.y, this.width, this.height);
-      this.drawChain(ctx);
-      this.renderLabels(ctx);
-      return;
-    }
-
-    const image = this.state === 'hurt' && this.hurtImage ? this.hurtImage : this.spriteImage;
-    const frameIdx = this.getFrameIndex();
-    const sx = frameIdx * this.SPRITE_FRAME_WIDTH;
-
-    ctx.save();
-    ctx.translate(this.x + this.width / 2, 0);
-    ctx.scale(-this.facing, 1);
-    ctx.drawImage(
-      image,
-      sx, 0, this.SPRITE_FRAME_WIDTH, this.FRAME_HEIGHT,
-      -this.SPRITE_FRAME_WIDTH / 2, this.y, this.SPRITE_FRAME_WIDTH, this.height,
-    );
-    ctx.restore();
-
-    if (this.useFallbackDetails) this.drawSignatureDetails(ctx);
-    this.drawChain(ctx);
-    this.renderLabels(ctx);
-    this.renderDebugHitboxes(ctx);
+    this.chainRenderer.render(ctx);
   }
 
   private startAttack(state: 'chainShot' | 'lowSweep' | 'downDrag', duration: number, cooldown: number): void {
@@ -305,7 +280,7 @@ export class ChainEnemy extends Entity {
     }
   }
 
-  private getFrameIndex(): number {
+  public getFrameIndex(): number {
     if (this.state === 'idle') return 0;
     if (this.state === 'walk') return 1 + this.currentFrame;
     if (this.state === 'hurt') return this.currentFrame;
@@ -318,68 +293,25 @@ export class ChainEnemy extends Entity {
     this.x = Math.max(0, Math.min(this.x, 2000 - this.width));
   }
 
-  private drawChain(ctx: CanvasRenderingContext2D): void {
-    if (this.state !== 'chainShot' && this.state !== 'boundPull' && this.state !== 'downDrag') return;
-    const anchor = this.getChainAnchor();
-    const progress = this.getChainDrawProgress();
-    if (progress <= 0) return;
-    const startX = anchor.x;
-    const startY = anchor.y;
-    const endX = startX + (this.chainTargetX - startX) * progress;
-    const endY = startY + (this.chainTargetY - startY) * progress;
-    if (this.chainImage) {
-      this.drawSpriteChain(ctx, startX, startY, endX, endY);
-      return;
-    }
-    ctx.save();
-    ctx.strokeStyle = '#b7c0aa';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([8, 5]);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(endX, endY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.strokeStyle = '#4b554a';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(startX, startY + 4);
-    ctx.lineTo(endX, endY + 4);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private getChainAnchor(): { x: number; y: number } {
+  public getChainAnchor(): { x: number; y: number } {
     if (this.state === 'chainShot' || this.state === 'boundPull') {
       const windup = this.state === 'chainShot' && this.currentFrame === 0;
-      return {
-        x: this.x + this.width / 2 + this.facing * 10,
-        y: this.y + (windup ? 52 : 76),
-      };
+      return { x: this.x + this.width / 2 + this.facing * 10, y: this.y + (windup ? 52 : 76) };
     }
     if (this.state === 'downDrag') {
-      return {
-        x: this.x + this.width / 2 + this.facing * 54,
-        y: this.y + 128,
-      };
+      return { x: this.x + this.width / 2 + this.facing * 54, y: this.y + 128 };
     }
-    return {
-      x: this.x + this.width / 2 + this.facing * 66,
-      y: this.y + 86,
-    };
+    return { x: this.x + this.width / 2 + this.facing * 66, y: this.y + 86 };
   }
 
-  private getChainHitboxBase(): { x: number; y: number } {
+  public getChainHitboxBase(): { x: number; y: number } {
     if (this.state === 'chainShot') {
-      return {
-        x: this.x + this.width / 2 + this.facing * 10,
-        y: this.y + 76,
-      };
+      return { x: this.x + this.width / 2 + this.facing * 10, y: this.y + 76 };
     }
     return this.getChainAnchor();
   }
 
-  private getChainDrawProgress(): number {
+  public getChainDrawProgress(): number {
     if (this.state === 'boundPull') return 1;
     if (this.state === 'downDrag') return this.easeOut(Math.min(1, this.getAttackElapsedRatio() / 0.55));
     if (this.state !== 'chainShot') return 0;
@@ -387,135 +319,13 @@ export class ChainEnemy extends Entity {
     return this.easeOut(Math.min(1, this.animTimer / (this.ANIM_SPEED * 0.65)));
   }
 
-  private getAttackElapsedRatio(): number {
+  public getAttackElapsedRatio(): number {
     if (this.attackDuration <= 0) return 1;
     return Math.max(0, Math.min(1, 1 - this.stateTimer / this.attackDuration));
   }
 
-  private easeOut(t: number): number {
+  public easeOut(t: number): number {
     return 1 - Math.pow(1 - t, 3);
   }
 
-  private drawSpriteChain(ctx: CanvasRenderingContext2D, startX: number, startY: number, endX: number, endY: number): void {
-    if (!this.chainImage) return;
-
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const length = Math.hypot(dx, dy);
-    if (length < 12) return;
-
-    const tileW = 32;
-    const tipW = 48;
-    const h = 18;
-    const bodyLength = Math.max(0, length - tipW + 8);
-
-    ctx.save();
-    ctx.translate(startX, startY);
-    ctx.rotate(Math.atan2(dy, dx));
-
-    for (let x = 0; x < bodyLength; x += tileW) {
-      const drawW = Math.min(tileW, bodyLength - x + 4);
-      ctx.drawImage(this.chainImage, 0, 0, tileW, h, x, -h / 2, drawW, h);
-    }
-
-    ctx.drawImage(this.chainImage, tileW, 0, tipW, h, Math.max(0, length - tipW), -h / 2, tipW, h);
-    ctx.restore();
-  }
-
-  private drawSignatureDetails(ctx: CanvasRenderingContext2D): void {
-    const centerX = this.x + this.width / 2;
-    const headY = this.y + 36;
-    const torsoY = this.y + 82;
-    const hipY = this.y + 126;
-    const facingOffset = this.facing * 18;
-
-    ctx.save();
-
-    // Hood and mask: makes the chain enemy read differently from the base grunt sprite.
-    ctx.fillStyle = '#1a3024';
-    ctx.beginPath();
-    ctx.ellipse(centerX, headY + 12, 31, 35, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#101915';
-    ctx.fillRect(centerX - 18, headY + 2, 36, 28);
-    ctx.fillStyle = '#d8e9b8';
-    ctx.fillRect(centerX + this.facing * 5 - 10, headY + 13, 7, 3);
-    ctx.fillRect(centerX + this.facing * 5 + 6, headY + 13, 7, 3);
-
-    // Rusted shoulder plates and a diagonal strap.
-    ctx.fillStyle = '#6f684d';
-    ctx.fillRect(centerX - 45, torsoY - 10, 28, 12);
-    ctx.fillRect(centerX + 17, torsoY - 10, 28, 12);
-    ctx.strokeStyle = '#2a1d16';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(centerX - 35, torsoY - 4);
-    ctx.lineTo(centerX + 35, hipY + 10);
-    ctx.stroke();
-
-    // Coiled chain at the waist, visible even when idle/walking.
-    ctx.strokeStyle = '#c8c2a5';
-    ctx.lineWidth = 3;
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.ellipse(centerX - 18 + i * 12, hipY, 8, 5, -0.2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // Chain hand/gauntlet. During attacks, it glints so the wind-up is easier to read.
-    const handX = centerX + facingOffset + this.facing * 28;
-    const handY = torsoY + 22;
-    const attacking = this.state === 'chainShot' || this.state === 'boundPull' || this.state === 'downDrag';
-    ctx.fillStyle = attacking ? '#e5d283' : '#8f8262';
-    ctx.fillRect(handX - 8, handY - 7, 16, 14);
-    ctx.strokeStyle = attacking ? '#fff0a5' : '#4b554a';
-    ctx.lineWidth = attacking ? 3 : 2;
-    ctx.beginPath();
-    ctx.arc(handX + this.facing * 10, handY, 12, -0.8, 0.9);
-    ctx.stroke();
-
-    if (this.state === 'lowSweep') {
-      ctx.strokeStyle = '#d0c58d';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(centerX + this.facing * 18, this.y + 150);
-      ctx.lineTo(centerX + this.facing * 74, this.y + 162);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-
-  private renderLabels(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = '#d9f5d4';
-    ctx.font = '10px monospace';
-    ctx.fillText(`CHAIN HP:${this.health}`, this.x, this.y - 5);
-  }
-
-  private renderDebugHitboxes(ctx: CanvasRenderingContext2D): void {
-    if (!DebugFlags.showHitboxes) return;
-    ctx.strokeStyle = '#8f8';
-    ctx.lineWidth = 1;
-    const body = this.getBodyHitbox();
-    ctx.strokeRect(body.x, body.y, body.w, body.h);
-    ctx.strokeStyle = '#0ff';
-    const hurt = this.getHurtHitbox();
-    ctx.strokeRect(hurt.x, hurt.y, hurt.w, hurt.h);
-    const atk = this.getAttackHitbox();
-    if (atk) {
-      ctx.strokeStyle = '#fd0';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
-    }
-  }
-
-  private drawShadow(ctx: CanvasRenderingContext2D): void {
-    const groundY = this.y + this.height - 8;
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
-    ctx.beginPath();
-    ctx.ellipse(this.x + this.width / 2, groundY, 50, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
 }
