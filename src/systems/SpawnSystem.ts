@@ -1,4 +1,11 @@
-import { Entity } from '../engine/Game';
+/*
+ * src/systems/SpawnSystem.ts
+ * 敵の生成・ターゲット割り当て・プレイヤー攻撃判定・エフェクト管理
+ * Entityを継承しているがシステムとして動作（敵を管理し、自らは描画されない）
+ * 関連: Enemy.ts, ChainEnemy.ts, HitEffect.ts
+ */
+
+import { Entity } from '../engine/Entity';
 import { ChainEnemy } from '../entities/ChainEnemy';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
@@ -206,9 +213,13 @@ export class SpawnSystem extends Entity {
     return this.enemies.filter(enemy => enemy.active);
   }
   
+  private getSortedEnemies(): EnemyActor[] {
+    return [...this.enemies].sort((a, b) => a.y - b.y);
+  }
+
   override render(ctx: CanvasRenderingContext2D): void {
-    const enemiesToRender = [...this.enemies].sort((a, b) => a.y - b.y);
-    for (const enemy of enemiesToRender) {
+    const sorted = this.getSortedEnemies();
+    for (const enemy of sorted) {
       if (enemy.active && !enemy.isBodyBlowGrappler) enemy.render(ctx);
     }
     for (const effect of this.effects) {
@@ -217,8 +228,8 @@ export class SpawnSystem extends Entity {
   }
 
   override renderOverlay(ctx: CanvasRenderingContext2D): void {
-    const enemiesToRender = [...this.enemies].sort((a, b) => a.y - b.y);
-    for (const enemy of enemiesToRender) {
+    const sorted = this.getSortedEnemies();
+    for (const enemy of sorted) {
       if (enemy.active && enemy.isBodyBlowGrappler) enemy.render(ctx);
     }
     for (const effect of this.effects) {

@@ -1,3 +1,11 @@
+/*
+ * src/main.ts
+ * ゲームのエントリポイント
+ * アセット読み込み・各システム初期化・デバッグキー割り当て
+ * 関連: Game.ts, Player.ts, SpawnSystem.ts, StageManager.ts
+ */
+
+import { loadImages } from './utils/loadImage';
 import { Game } from './engine/Game';
 import { InputManager } from './engine/InputManager';
 import { Player } from './entities/Player';
@@ -40,113 +48,46 @@ const spawner = new SpawnSystem(
   },
 );
 
-const idleImg = new Image();
-idleImg.src = idleUrl;
-idleImg.onload = () => {
-  player.idleImage = idleImg;
-};
-
-const pinchIdleImg = new Image();
-pinchIdleImg.src = pinchIdleUrl;
-pinchIdleImg.onload = () => {
-  player.pinchIdleImage = pinchIdleImg;
-};
-
-const walkSheet = new Image();
-walkSheet.src = walkUrl;
-walkSheet.onload = () => {
-  player.spriteImage = walkSheet;
-};
-
-const attackSheet = new Image();
-attackSheet.src = attackUrl;
-attackSheet.onload = () => {
-  player.attackImage = attackSheet;
-};
-
-const kickSheet = new Image();
-kickSheet.src = kickUrl;
-kickSheet.onload = () => {
-  player.kickImage = kickSheet;
-};
-
-const jumpImg = new Image();
-jumpImg.src = jumpUrl;
-jumpImg.onload = () => {
-  player.jumpImage = jumpImg;
-};
-
-const hurtImg = new Image();
-hurtImg.src = hurtUrl;
-hurtImg.onload = () => {
-  player.hurtImage = hurtImg;
-};
-
-const grabbedImg = new Image();
-grabbedImg.src = grabbedUrl;
-grabbedImg.onload = () => {
-  player.grabbedImage = grabbedImg;
-};
-
-const deathImg = new Image();
-deathImg.src = deathUrl;
-deathImg.onload = () => {
-  player.deathImage = deathImg;
-};
-
-const downImg = new Image();
-downImg.src = downUrl;
-downImg.onload = () => {
-  player.downImage = downImg;
-};
-
-const downHitImg = new Image();
-downHitImg.src = downHitUrl;
-downHitImg.onload = () => {
-  player.downHitImage = downHitImg;
-};
-
-const getupImg = new Image();
-getupImg.src = getupUrl;
-getupImg.onload = () => {
-  player.getupImage = getupImg;
-};
-
-const gruntSheet = new Image();
-gruntSheet.src = gruntUrl;
-gruntSheet.onload = () => {
-  spawner.spriteImage = gruntSheet;
-};
-
-const gruntHurtSheet = new Image();
-gruntHurtSheet.src = gruntHurtUrl;
-gruntHurtSheet.onload = () => {
-  spawner.hurtImage = gruntHurtSheet;
-};
-
-const gruntHeavySheet = new Image();
-gruntHeavySheet.src = gruntHeavyUrl;
-gruntHeavySheet.onload = () => {
-  spawner.heavyAttackImage = gruntHeavySheet;
-};
-
-const gruntBodyBlowSheet = new Image();
-gruntBodyBlowSheet.src = gruntBodyBlowUrl;
-gruntBodyBlowSheet.onload = () => {
-  spawner.bodyBlowImage = gruntBodyBlowSheet;
-};
-
-const chainEnemySheet = new Image();
-chainEnemySheet.src = chainEnemyUrl;
-chainEnemySheet.onload = () => {
-  spawner.chainSpriteImage = chainEnemySheet;
-};
-
-const chainProjectileImg = new Image();
-chainProjectileImg.src = chainProjectileUrl;
-chainProjectileImg.onload = () => {
-  spawner.chainProjectileImage = chainProjectileImg;
-};
+// 全スプライトを非同期で読み込み、完了後にゲーム開始
+loadImages({
+  idle: idleUrl,
+  pinchIdle: pinchIdleUrl,
+  walk: walkUrl,
+  attack: attackUrl,
+  kick: kickUrl,
+  jump: jumpUrl,
+  hurt: hurtUrl,
+  grabbed: grabbedUrl,
+  death: deathUrl,
+  down: downUrl,
+  downHit: downHitUrl,
+  getup: getupUrl,
+  grunt: gruntUrl,
+  gruntHurt: gruntHurtUrl,
+  gruntHeavy: gruntHeavyUrl,
+  gruntBodyBlow: gruntBodyBlowUrl,
+  chainEnemy: chainEnemyUrl,
+  chainProjectile: chainProjectileUrl,
+}).then((imgs) => {
+  player.idleImage = imgs.idle;
+  player.pinchIdleImage = imgs.pinchIdle;
+  player.spriteImage = imgs.walk;
+  player.attackImage = imgs.attack;
+  player.kickImage = imgs.kick;
+  player.jumpImage = imgs.jump;
+  player.hurtImage = imgs.hurt;
+  player.grabbedImage = imgs.grabbed;
+  player.deathImage = imgs.death;
+  player.downImage = imgs.down;
+  player.downHitImage = imgs.downHit;
+  player.getupImage = imgs.getup;
+  spawner.spriteImage = imgs.grunt;
+  spawner.hurtImage = imgs.gruntHurt;
+  spawner.heavyAttackImage = imgs.gruntHeavy;
+  spawner.bodyBlowImage = imgs.gruntBodyBlow;
+  spawner.chainSpriteImage = imgs.chainEnemy;
+  spawner.chainProjectileImage = imgs.chainProjectile;
+});
 
 game.setBackground(stage);
 

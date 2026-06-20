@@ -1,4 +1,11 @@
-import { Entity } from '../engine/Game';
+/*
+ * src/entities/Enemy.ts
+ * グラント（雑魚敵）のAI・状態管理・描画・当たり判定
+ * パターン攻撃・グラブ・追撃など複数の行動を持つ
+ * 関連: Entity.ts, Player.ts（ターゲット）, SpawnSystem.ts（生成）
+ */
+
+import { Entity } from '../engine/Entity';
 import { DownHitReactionType, HitReactionType, Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
@@ -81,176 +88,192 @@ export class Enemy extends Entity {
   
   override update(dt: number): void {
     const player = this.player();
-    const targetX = this.targetX ?? player.x;
     const dx = player.x - this.x;
-    const dxToTarget = targetX - this.x;
     this.facing = dx > 0 ? 1 : -1;
-    
+
     this.attackCooldown -= dt;
     this.grabCooldown -= dt;
     this.behaviorTimer -= dt;
-    
-    if (this.stateTimer > 0) {
-      this.stateTimer -= dt;
-      if (this.stateTimer <= 0) {
-        if (this.state === 'hurt') {
-          this.state = 'idle';
-          this.velocityX = 0;
-        } else if (this.state === 'attack' || this.state === 'heavyAttack' || this.state === 'bodyBlow' || this.state === 'downAttack') {
-          this.state = 'idle';
-          this.velocityX = 0;
-        } else if (this.state === 'grab') {
-          player.finishGrab(this.x);
-          this.state = 'idle';
-          this.velocityX = 0;
-          this.attackCooldown = this.ATTACK_COOLDOWN;
-          this.grabCooldown = this.GRAB_COOLDOWN;
-          this.tryingGrab = false;
-        } else if (this.state === 'grabFollowup') {
-          player.finishGrabFollowup();
-          this.state = 'idle';
-          this.velocityX = 0;
-          this.attackCooldown = this.GRAB_FOLLOWUP_COOLDOWN;
-        } else if (this.state === 'death') {
-          this.active = false;
-        }
-      }
-    }
-    
-    if (this.state === 'hurt') {
+
+    this.handleStateTimer(player, dt);
+
+    if (this.state === 'hurt' || this.state === 'death') {
       this.applyPhysics(dt);
       this.updateAnimation(dt);
       return;
     }
 
-    if (this.state === 'death') {
+    if (this.tryGameOverRetreat(player, dt)) return;
+    if (this.tryGrabBehaviour(player, dt)) return;
+    if (this.tryGrabFollowupBehaviour(player, dt)) return;
+    if (this.tryAttackBehaviour(player, dt)) return;
+    if (this.tryRetreatFromDowned(player, dt)) return;
+
+    const targetX = this.targetX ?? player.x;
+    const dxToTarget = targetX - this.x;
+    const dist = Math.abs(dx);
+    const targetDist = Math.abs(dxToTarget);
+    const canGrab = player.canBeGrabbed && this.grabCooldown <= 0;
+
+    this.updateFlankTarget(player, dist, canGrab);
+
+    if (this.flankTargetX !== null) {
+      this.state = 'walk';
+      this.velocityX = Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED;
+    } else if (this.tryDownedAttack(player, dist)) {
+    } else if (this.tryJoinGrabFollowup(player)) {
+    } else if (this.tryGrabAttempt(player, dx, dist, canGrab)) {
       this.applyPhysics(dt);
       this.updateAnimation(dt);
       return;
+    } else if (this.tryStandingAttack(player, dx, dist, canGrab)) {
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    } else if (this.tryCooldownStrafe(player, dx, dist)) {
+    } else if (this.tryAdvanceInRange(dist)) {
+    } else {
+      this.moveTowardTarget(dxToTarget, targetDist);
     }
 
-    if (player.isGameOver && !DebugFlags.allowPostGameOverAttacks) {
-      this.flankTargetX = null;
-      this.attackHit = false;
-      this.tryingGrab = false;
-      if (Math.abs(dx) < this.RETREAT_RANGE) {
-        this.state = 'walk';
-        this.velocityX = -this.facing * this.RETREAT_SPEED;
-      } else {
+    this.applyPhysics(dt);
+    this.updateAnimation(dt);
+  }
+
+  private handleStateTimer(player: Player, dt: number): void {
+    if (this.stateTimer <= 0) return;
+    this.stateTimer -= dt;
+    if (this.stateTimer > 0) return;
+
+    switch (this.state) {
+      case 'hurt':
+      case 'attack':
+      case 'heavyAttack':
+      case 'bodyBlow':
+      case 'downAttack':
         this.state = 'idle';
         this.velocityX = 0;
-      }
-      this.applyPhysics(dt);
-      this.updateAnimation(dt);
-      return;
-    }
-    
-    if (this.state === 'grab') {
-      player.updateGrabbedPosition(this.x);
-      this.velocityX = 0;
-      this.grabTickTimer -= dt;
-      if (this.grabTickTimer <= 0) {
-        this.grabTickTimer = this.GRAB_TICK_INTERVAL;
-        player.applyGrabDamage(this.GRAB_TICK_DAMAGE);
-        this.onHit?.(player.x + player.width / 2, player.y + player.height / 2);
-        this.onHitStop?.(0.035, 0.04, 1);
-      }
-      this.applyPhysics(dt);
-      this.updateAnimation(dt);
-      return;
-    }
-
-    if (this.state === 'grabFollowup') {
-      if (!player.isGrabbed) {
+        break;
+      case 'grab':
+        player.finishGrab(this.x);
+        this.state = 'idle';
+        this.velocityX = 0;
+        this.attackCooldown = this.ATTACK_COOLDOWN;
+        this.grabCooldown = this.GRAB_COOLDOWN;
+        this.tryingGrab = false;
+        break;
+      case 'grabFollowup':
         player.finishGrabFollowup();
         this.state = 'idle';
         this.velocityX = 0;
-        this.applyPhysics(dt);
-        this.updateAnimation(dt);
-        return;
-      }
-      this.x = player.grabFollowupX;
-      this.facing = player.x > this.x ? 1 : -1;
-      player.updateGrabFollowupPosition(this.x);
+        this.attackCooldown = this.GRAB_FOLLOWUP_COOLDOWN;
+        break;
+      case 'death':
+        this.active = false;
+        break;
+    }
+  }
+
+  private tryGameOverRetreat(player: Player, dt: number): boolean {
+    if (!player.isGameOver || DebugFlags.allowPostGameOverAttacks) return false;
+    this.flankTargetX = null;
+    this.attackHit = false;
+    this.tryingGrab = false;
+    const retreat = Math.abs(player.x - this.x) < this.RETREAT_RANGE;
+    this.state = retreat ? 'walk' : 'idle';
+    this.velocityX = retreat ? -this.facing * this.RETREAT_SPEED : 0;
+    this.applyPhysics(dt);
+    this.updateAnimation(dt);
+    return true;
+  }
+
+  private tryGrabBehaviour(player: Player, dt: number): boolean {
+    if (this.state !== 'grab') return false;
+    player.updateGrabbedPosition(this.x);
+    this.velocityX = 0;
+    this.grabTickTimer -= dt;
+    if (this.grabTickTimer <= 0) {
+      this.grabTickTimer = this.GRAB_TICK_INTERVAL;
+      player.applyGrabDamage(this.GRAB_TICK_DAMAGE);
+      this.onHit?.(player.x + player.width / 2, player.y + player.height / 2);
+      this.onHitStop?.(0.035, 0.04, 1);
+    }
+    this.applyPhysics(dt);
+    this.updateAnimation(dt);
+    return true;
+  }
+
+  private tryGrabFollowupBehaviour(player: Player, dt: number): boolean {
+    if (this.state !== 'grabFollowup') return false;
+    if (!player.isGrabbed) {
+      player.finishGrabFollowup();
+      this.state = 'idle';
       this.velocityX = 0;
-      this.grabFollowupTickTimer -= dt;
-      if (this.grabFollowupTickTimer <= 0) {
-        this.grabFollowupTickTimer = this.GRAB_FOLLOWUP_TICK_INTERVAL;
-        player.receiveGrabFollowupHit(this.x, this.GRAB_FOLLOWUP_DAMAGE);
-        this.onHit?.(player.grabFollowupHitX, player.grabFollowupHitY, true);
-        this.onHitStop?.(0.055, 0.08, 2);
-      }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
-      return;
+      return true;
+    }
+    this.x = player.grabFollowupX;
+    this.facing = player.x > this.x ? 1 : -1;
+    player.updateGrabFollowupPosition(this.x);
+    this.velocityX = 0;
+    this.grabFollowupTickTimer -= dt;
+    if (this.grabFollowupTickTimer <= 0) {
+      this.grabFollowupTickTimer = this.GRAB_FOLLOWUP_TICK_INTERVAL;
+      player.receiveGrabFollowupHit(this.x, this.GRAB_FOLLOWUP_DAMAGE);
+      this.onHit?.(player.grabFollowupHitX, player.grabFollowupHitY, true);
+      this.onHitStop?.(0.055, 0.08, 2);
+    }
+    this.applyPhysics(dt);
+    this.updateAnimation(dt);
+    return true;
+  }
+
+  private tryAttackBehaviour(player: Player, dt: number): boolean {
+    if (this.state !== 'attack' && this.state !== 'heavyAttack' && this.state !== 'bodyBlow' && this.state !== 'downAttack') return false;
+    if (this.currentFrame === 1 && !this.attackHit) {
+      this.attackHit = true;
+      this.resolveHit(player);
+    }
+    this.applyPhysics(dt);
+    this.updateAnimation(dt);
+    return true;
+  }
+
+  private resolveHit(player: Player): void {
+    const atk = this.getAttackHitbox();
+    const hurt = player.getHurtHitbox();
+    if (!atk || !rectsOverlap(atk, hurt)) return;
+
+    if (player.canReceiveGroundHit || player.canBeKnockedDownByFollowup || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
+      player.downHit(this.x, DebugFlags.allowPostGameOverAttacks, this.currentAttackDamage, this.currentDownHitReaction);
+      this.attackCooldown = Math.max(this.attackCooldown, this.DOWNED_ATTACK_COOLDOWN);
+    } else {
+      player.takeDamage(this.currentAttackDamage, this.x, this.currentAttackReaction);
     }
 
-    if (this.state === 'attack' || this.state === 'heavyAttack' || this.state === 'bodyBlow' || this.state === 'downAttack') {
-      // Check hit on strike frame
-      if (this.currentFrame === 1 && !this.attackHit) {
-        const atk = this.getAttackHitbox();
-        const hurt = player.getHurtHitbox();
-        this.attackHit = true;
-        if (atk && rectsOverlap(atk, hurt)) {
-          if (player.canReceiveGroundHit || player.canBeKnockedDownByFollowup || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
-            player.downHit(this.x, DebugFlags.allowPostGameOverAttacks, this.currentAttackDamage, this.currentDownHitReaction);
-            this.attackCooldown = Math.max(this.attackCooldown, this.DOWNED_ATTACK_COOLDOWN);
-          } else if (!player.isDefeated && !player.isWakeupInvincible) {
-            if (!DebugFlags.noPlayerHpDamage) player.health -= this.currentAttackDamage;
-            if (player.health <= 0) {
-              player.die(this.x);
-            } else {
-              player.hurt(this.x, this.currentAttackReaction);
-            }
-          } else {
-            return;
-          }
-          const left = Math.max(atk.x, hurt.x);
-          const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
-          const top = Math.max(atk.y, hurt.y);
-          const bottom = Math.min(atk.y + atk.h, hurt.y + hurt.h);
-          this.onHit?.((left + right) / 2, (top + bottom) / 2);
-          const heavy = this.state === 'heavyAttack' || this.state === 'bodyBlow' || this.state === 'downAttack' || this.currentAttackReaction === 'guardHead';
-          this.onHitStop?.(heavy ? 0.095 : 0.045, heavy ? 0.16 : 0.06, heavy ? 4 : 1.5);
-        }
-      }
-      this.applyPhysics(dt);
-      this.updateAnimation(dt);
-      return;
-    }
-    
+    const cx = (atk.x + atk.x + atk.w + hurt.x + hurt.x + hurt.w) / 4;
+    const cy = (atk.y + atk.y + atk.h + hurt.y + hurt.y + hurt.h) / 4;
+    this.onHit?.(cx, cy);
+
+    const heavy = this.state === 'heavyAttack' || this.state === 'bodyBlow' || this.state === 'downAttack' || this.currentAttackReaction === 'guardHead';
+    this.onHitStop?.(heavy ? 0.095 : 0.045, heavy ? 0.16 : 0.06, heavy ? 4 : 1.5);
+  }
+
+  private tryRetreatFromDowned(player: Player, dt: number): boolean {
+    const dx = player.x - this.x;
     const dist = Math.abs(dx);
-    const targetDist = Math.abs(dxToTarget);
-    if (player.isDowned && !player.canReceiveGroundHit && !(DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
-      this.flankTargetX = null;
-      this.tryingGrab = false;
-      if (dist < this.RETREAT_RANGE) {
-        this.state = 'walk';
-        this.velocityX = -this.facing * this.RETREAT_SPEED;
-      } else {
-        this.state = 'idle';
-        this.velocityX = 0;
-      }
-      this.applyPhysics(dt);
-      this.updateAnimation(dt);
-      return;
-    }
+    if (!player.isDowned || player.canReceiveGroundHit || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) return false;
+    this.flankTargetX = null;
+    this.tryingGrab = false;
+    this.state = dist < this.RETREAT_RANGE ? 'walk' : 'idle';
+    this.velocityX = dist < this.RETREAT_RANGE ? -this.facing * this.RETREAT_SPEED : 0;
+    this.applyPhysics(dt);
+    this.updateAnimation(dt);
+    return true;
+  }
 
-    const canGrab = player.canBeGrabbed && this.grabCooldown <= 0;
-
-    if (
-      canGrab &&
-      this.tryingGrab &&
-      dist < this.GRAB_APPROACH_RANGE &&
-      dist >= this.GRAB_RANGE
-    ) {
-      this.state = 'walk';
-      this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.85;
-      this.applyPhysics(dt);
-      this.updateAnimation(dt);
-      return;
-    }
-
+  private updateFlankTarget(player: Player, dist: number, canGrab: boolean): void {
     if (dist < this.TOO_CLOSE_RANGE && this.flankTargetX === null && !(canGrab && this.tryingGrab) && !player.isGrabbed) {
       const passDirection = this.x < player.x ? 1 : -1;
       this.flankTargetX = player.x + passDirection * this.FLANK_DISTANCE;
@@ -258,31 +281,30 @@ export class Enemy extends Entity {
     if (this.flankTargetX !== null && Math.abs(this.flankTargetX - this.x) < 8) {
       this.flankTargetX = null;
     }
-    
-    // Attack if within range and cooldown ready
-    const followupDist = Math.abs(player.grabFollowupX - this.x);
-    const canJoinGrabFollowup =
-      player.isGrabbed &&
-      !this.isHoldingPlayer &&
-      !player.isDoubleGrabbed &&
-      this.attackCooldown <= 0;
+  }
 
-    if (this.flankTargetX !== null) {
-      this.state = 'walk';
-      this.velocityX = Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED;
-    } else if (player.canReceiveGroundHit && dist < this.DOWN_ATTACK_RANGE && this.attackCooldown <= 0) {
-      this.state = 'downAttack';
-      this.stateTimer = 0.5;
-      this.animTimer = 0;
-      this.currentFrame = 0;
-      this.attackCooldown = this.DOWNED_ATTACK_COOLDOWN;
-      this.velocityX = 0;
-      this.attackHit = false;
-      this.tryingGrab = false;
-      this.currentAttackReaction = 'bodyBlow';
-      this.currentDownHitReaction = this.nextDownHitReaction();
-      this.currentAttackDamage = this.DOWN_ATTACK_DAMAGE;
-    } else if (canJoinGrabFollowup && dist < this.GRAB_FOLLOWUP_JOIN_RANGE) {
+  private tryDownedAttack(player: Player, dist: number): boolean {
+    if (!player.canReceiveGroundHit || dist >= this.DOWN_ATTACK_RANGE || this.attackCooldown > 0) return false;
+    this.state = 'downAttack';
+    this.stateTimer = 0.5;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.attackCooldown = this.DOWNED_ATTACK_COOLDOWN;
+    this.velocityX = 0;
+    this.attackHit = false;
+    this.tryingGrab = false;
+    this.currentAttackReaction = 'bodyBlow';
+    this.currentDownHitReaction = this.nextDownHitReaction();
+    this.currentAttackDamage = this.DOWN_ATTACK_DAMAGE;
+    return true;
+  }
+
+  private tryJoinGrabFollowup(player: Player): boolean {
+    const canJoin = player.isGrabbed && !this.isHoldingPlayer && !player.isDoubleGrabbed && this.attackCooldown <= 0;
+    if (!canJoin) return false;
+
+    const followupDist = Math.abs(player.grabFollowupX - this.x);
+    if (followupDist < this.GRAB_FOLLOWUP_JOIN_RANGE) {
       if (player.startGrabFollowup(this.x)) {
         this.state = 'grabFollowup';
         this.stateTimer = this.GRAB_FOLLOWUP_DURATION;
@@ -291,13 +313,30 @@ export class Enemy extends Entity {
         this.attackHit = false;
         this.tryingGrab = false;
       }
-    } else if (canJoinGrabFollowup && followupDist >= 8) {
+    } else if (followupDist >= 8) {
       this.state = 'walk';
       this.velocityX = Math.sign(player.grabFollowupX - this.x) * this.MOVE_SPEED * 0.9;
-    } else if (player.isGrabbed && !this.isHoldingPlayer) {
+    } else {
       this.state = 'idle';
       this.velocityX = 0;
-    } else if (canGrab && dist < this.GRAB_RANGE && (this.tryingGrab || Math.random() < this.GRAB_ATTEMPT_CHANCE)) {
+    }
+    return true;
+  }
+
+  private tryGrabAttempt(player: Player, dx: number, dist: number, canGrab: boolean): boolean {
+    if (player.isGrabbed && !this.isHoldingPlayer) {
+      this.state = 'idle';
+      this.velocityX = 0;
+      return true;
+    }
+
+    if (canGrab && dist < this.GRAB_APPROACH_RANGE && dist >= this.GRAB_RANGE && this.tryingGrab) {
+      this.state = 'walk';
+      this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.85;
+      return true;
+    }
+
+    if (canGrab && dist < this.GRAB_RANGE && (this.tryingGrab || Math.random() < this.GRAB_ATTEMPT_CHANCE)) {
       this.state = 'grab';
       this.stateTimer = this.GRAB_DURATION;
       this.grabTickTimer = 0;
@@ -306,44 +345,58 @@ export class Enemy extends Entity {
       this.attackHit = false;
       this.tryingGrab = false;
       player.startGrabbed(this.x);
-    } else if (dist < this.ATTACK_RANGE && this.attackCooldown <= 0) {
-      if (canGrab && dist < this.GRAB_APPROACH_RANGE && Math.random() < this.GRAB_ATTEMPT_CHANCE) {
-        this.tryingGrab = true;
-        this.state = 'walk';
-        this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.85;
-        this.applyPhysics(dt);
-        this.updateAnimation(dt);
-        return;
-      }
-      const attackKind = this.nextStandingAttackKind();
-      this.state = attackKind === 'heavy' ? 'heavyAttack' : attackKind === 'bodyBlow' ? 'bodyBlow' : 'attack';
-      this.stateTimer = attackKind === 'heavy' ? 0.58 : attackKind === 'bodyBlow' ? 0.54 : 0.4;
-      this.animTimer = 0;
-      this.currentFrame = 0;
-      this.attackCooldown = this.ATTACK_COOLDOWN;
-      this.velocityX = 0;
-      this.attackHit = false;
-      this.tryingGrab = false;
-      this.currentAttackReaction = this.getStandingAttackReaction(attackKind);
-      this.currentDownHitReaction = attackKind === 'heavy' ? 'launch' : this.nextDownHitReaction();
-      this.currentAttackDamage = attackKind === 'heavy'
-        ? 12
-        : attackKind === 'bodyBlow' ? this.BODY_BLOW_DAMAGE : this.damage;
-    } else if (this.attackCooldown > 0 && dist < this.RETREAT_RANGE) {
-      // Cooldown: strafe instead of retreat to stay engaged
-      if (this.flankTargetX === null && Math.random() < 0.03) {
-        const side = Math.random() < 0.5 ? 1 : -1;
-        this.flankTargetX = player.x + side * this.FLANK_DISTANCE;
-      }
+      return true;
+    }
+    return false;
+  }
+
+  private tryStandingAttack(_player: Player, dx: number, dist: number, canGrab: boolean): boolean {
+    if (dist >= this.ATTACK_RANGE || this.attackCooldown > 0) return false;
+
+    if (canGrab && dist < this.GRAB_APPROACH_RANGE && Math.random() < this.GRAB_ATTEMPT_CHANCE) {
+      this.tryingGrab = true;
       this.state = 'walk';
-      this.velocityX = this.flankTargetX !== null
-        ? Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED
-        : Math.sign(dx) * this.MOVE_SPEED * 0.4;
-    } else if (dist < this.ATTACK_RANGE) {
-      // In range but on cooldown: advance slowly instead of idle
-      this.state = 'walk';
-      this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.15;
-    } else if (targetDist < 12) {
+      this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.85;
+      return true;
+    }
+
+    const attackKind = this.nextStandingAttackKind();
+    this.state = attackKind === 'heavy' ? 'heavyAttack' : attackKind === 'bodyBlow' ? 'bodyBlow' : 'attack';
+    this.stateTimer = attackKind === 'heavy' ? 0.58 : attackKind === 'bodyBlow' ? 0.54 : 0.4;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.attackCooldown = this.ATTACK_COOLDOWN;
+    this.velocityX = 0;
+    this.attackHit = false;
+    this.tryingGrab = false;
+    this.currentAttackReaction = this.getStandingAttackReaction(attackKind);
+    this.currentDownHitReaction = attackKind === 'heavy' ? 'launch' : this.nextDownHitReaction();
+    this.currentAttackDamage = attackKind === 'heavy' ? 12 : attackKind === 'bodyBlow' ? this.BODY_BLOW_DAMAGE : this.damage;
+    return true;
+  }
+
+  private tryCooldownStrafe(player: Player, dx: number, dist: number): boolean {
+    if (this.attackCooldown <= 0 || dist >= this.RETREAT_RANGE) return false;
+    if (this.flankTargetX === null && Math.random() < 0.03) {
+      const side = Math.random() < 0.5 ? 1 : -1;
+      this.flankTargetX = player.x + side * this.FLANK_DISTANCE;
+    }
+    this.state = 'walk';
+    this.velocityX = this.flankTargetX !== null
+      ? Math.sign(this.flankTargetX - this.x) * this.FLANK_SPEED
+      : Math.sign(dx) * this.MOVE_SPEED * 0.4;
+    return true;
+  }
+
+  private tryAdvanceInRange(dist: number): boolean {
+    if (dist >= this.ATTACK_RANGE) return false;
+    this.state = 'walk';
+    this.velocityX = 0;
+    return true;
+  }
+
+  private moveTowardTarget(dxToTarget: number, targetDist: number): void {
+    if (targetDist < 12) {
       this.velocityX = 0;
       this.state = 'idle';
     } else if (targetDist < this.STOP_RANGE) {
@@ -364,9 +417,6 @@ export class Enemy extends Entity {
         this.velocityX = Math.sign(dxToTarget) * this.MOVE_SPEED;
       }
     }
-    
-    this.applyPhysics(dt);
-    this.updateAnimation(dt);
   }
 
   setTargetX(targetX: number): void {

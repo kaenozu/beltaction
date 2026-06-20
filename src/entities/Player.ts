@@ -1,4 +1,11 @@
-import { Entity } from '../engine/Game';
+/*
+ * src/entities/Player.ts
+ * プレイヤーキャラクター（Maki）の状態管理・描画・当たり判定
+ * アイドル/歩行/攻撃/被弾/ダウン/死亡などのステートマシン
+ * 関連: Entity.ts, InputManager.ts（入力）, Enemy.ts（衝突）
+ */
+
+import { Entity } from '../engine/Entity';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
 import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
@@ -91,6 +98,18 @@ export class Player extends Entity {
   private readonly GRAVITY = 1200;
   private readonly MOVE_SPEED = 220;
   private readonly JUMP_FORCE = -500;
+
+  /** 統一ダメージ処理: noPlayerHpDamage/無敵/死亡チェックを含む */
+  takeDamage(amount: number, fromX: number, reaction: HitReactionType = 'light'): boolean {
+    if (this.isDefeated || this.isWakeupInvincible || DebugFlags.noPlayerHpDamage) return false;
+    this.health = Math.max(0, this.health - amount);
+    if (this.health <= 0) {
+      this.die(fromX);
+    } else {
+      this.hurt(fromX, reaction);
+    }
+    return true;
+  }
   
   public spriteImage: HTMLImageElement | null = null;
   public idleImage: HTMLImageElement | null = null;
@@ -640,6 +659,18 @@ export class Player extends Entity {
     ctx.translate(this.x + this.width / 2, 0);
     ctx.scale(this.facing, 1);
 
+    this.renderSprite(ctx);
+
+    ctx.restore();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px monospace';
+    ctx.fillText(`${this.state.toUpperCase()} [${this.currentFrame}] r=${this.rapidCount}`, this.x, this.y - 5);
+
+    this.renderDebugHitboxes(ctx);
+  }
+
+  private renderSprite(ctx: CanvasRenderingContext2D): void {
     if (this.state === 'idle' && (this.idleImage || this.pinchIdleImage)) {
       const idle = this.isLowHealth && this.pinchIdleImage ? this.pinchIdleImage : this.idleImage;
       if (idle) ctx.drawImage(idle, -this.width / 2, this.y, this.width, this.height);
@@ -651,12 +682,7 @@ export class Player extends Entity {
         -this.width / 2, this.y, this.width, this.height,
       );
     } else if (this.state === 'attack' && this.attackImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
-      ctx.drawImage(
-        this.attackImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
+      this.renderFrameSprite(ctx, this.attackImage, this.currentFrame * this.FRAME_WIDTH);
     } else if (this.state === 'kick' && this.kickImage) {
       const sx = this.currentFrame * this.KICK_FRAME_WIDTH;
       ctx.drawImage(
@@ -669,75 +695,85 @@ export class Player extends Entity {
     } else if (this.state === 'death' && this.deathImage) {
       ctx.drawImage(this.deathImage, -this.width / 2, this.y, this.width, this.height);
     } else if (this.state === 'hurt' && this.hurtImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
-      const s = this.hurtDrawScale;
-      ctx.drawImage(
-        this.hurtImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width * s / 2, this.y - this.height * (s - 1),
-        this.width * s, this.height * s,
-      );
+      this.renderHurtSprite(ctx);
     } else if ((this.state === 'grabbed' || this.state === 'bound') && (this.grabbedImage || this.hurtImage)) {
-      if (this.grabbedImage) {
-        ctx.drawImage(this.grabbedImage, -this.width / 2, this.y, this.width, this.height);
-      } else if (this.hurtImage) {
-        const sx = HURT_FRAME_BY_REACTION.guardHead * this.FRAME_WIDTH;
-        ctx.drawImage(
-          this.hurtImage,
-          sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-          -this.width / 2, this.y, this.width, this.height,
-        );
-      }
+      this.renderGrabbedSprite(ctx);
     } else if (this.state === 'down' && this.downImage) {
       this.drawGroundedSprite(ctx, this.downImage, this.DOWN_SOURCE, this.DOWN_DRAW_WIDTH, this.DOWN_DRAW_HEIGHT);
     } else if (this.state === 'downhit' && this.downHitImage) {
-      const presentation = DOWN_HIT_PRESENTATION[this.currentDownHitReaction];
-      this.drawGroundedSprite(
-        ctx,
-        this.downHitImage,
-        this.DOWN_HIT_SOURCE,
-        this.DOWN_HIT_DRAW_WIDTH * presentation.drawScale,
-        this.DOWN_HIT_DRAW_HEIGHT * presentation.drawScale,
-        presentation.drawOffsetX,
-        presentation.drawOffsetY,
-      );
+      this.renderDownHitSprite(ctx);
     } else if (this.state === 'getup' && this.getupImage) {
-      const sx = this.currentFrame * this.FRAME_WIDTH;
-      ctx.drawImage(
-        this.getupImage,
-        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
-        -this.width / 2, this.y, this.width, this.height,
-      );
+      this.renderFrameSprite(ctx, this.getupImage, this.currentFrame * this.FRAME_WIDTH);
     } else if (this.idleImage) {
       ctx.drawImage(this.idleImage, -this.width / 2, this.y, this.width, this.height);
     } else {
       ctx.fillStyle = this.name === 'Maki' ? '#ff6b6b' : '#4dabf7';
       ctx.fillRect(-this.width / 2, this.y, this.width, this.height);
     }
-    ctx.restore();
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px monospace';
-    ctx.fillText(`${this.state.toUpperCase()} [${this.currentFrame}] r=${this.rapidCount}`, this.x, this.y - 5);
-    
-    // Debug: collision box
-    if (DebugFlags.showHitboxes) {
-      ctx.strokeStyle = '#0f0';
-      ctx.lineWidth = 1;
-      const body = this.getBodyHitbox();
-      ctx.strokeRect(body.x, body.y, body.w, body.h);
+  }
 
-      ctx.strokeStyle = '#0ff';
-      const hurt = this.getHurtHitbox();
-      ctx.strokeRect(hurt.x, hurt.y, hurt.w, hurt.h);
+  private renderFrameSprite(ctx: CanvasRenderingContext2D, image: HTMLImageElement, sx: number): void {
+    ctx.drawImage(
+      image,
+      sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+      -this.width / 2, this.y, this.width, this.height,
+    );
+  }
 
-      const atk = this.getAttackHitbox();
-      if (atk) {
-        ctx.strokeStyle = '#f80';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
-      }
+  private renderHurtSprite(ctx: CanvasRenderingContext2D): void {
+    const sx = this.currentFrame * this.FRAME_WIDTH;
+    const s = this.hurtDrawScale;
+    ctx.drawImage(
+      this.hurtImage!,
+      sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+      -this.width * s / 2, this.y - this.height * (s - 1),
+      this.width * s, this.height * s,
+    );
+  }
+
+  private renderGrabbedSprite(ctx: CanvasRenderingContext2D): void {
+    if (this.grabbedImage) {
+      ctx.drawImage(this.grabbedImage, -this.width / 2, this.y, this.width, this.height);
+    } else if (this.hurtImage) {
+      const sx = HURT_FRAME_BY_REACTION.guardHead * this.FRAME_WIDTH;
+      ctx.drawImage(
+        this.hurtImage,
+        sx, 0, this.FRAME_WIDTH, this.FRAME_HEIGHT,
+        -this.width / 2, this.y, this.width, this.height,
+      );
     }
+  }
 
+  private renderDownHitSprite(ctx: CanvasRenderingContext2D): void {
+    const presentation = DOWN_HIT_PRESENTATION[this.currentDownHitReaction];
+    this.drawGroundedSprite(
+      ctx,
+      this.downHitImage!,
+      this.DOWN_HIT_SOURCE,
+      this.DOWN_HIT_DRAW_WIDTH * presentation.drawScale,
+      this.DOWN_HIT_DRAW_HEIGHT * presentation.drawScale,
+      presentation.drawOffsetX,
+      presentation.drawOffsetY,
+    );
+  }
+
+  private renderDebugHitboxes(ctx: CanvasRenderingContext2D): void {
+    if (!DebugFlags.showHitboxes) return;
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 1;
+    const body = this.getBodyHitbox();
+    ctx.strokeRect(body.x, body.y, body.w, body.h);
+
+    ctx.strokeStyle = '#0ff';
+    const hurt = this.getHurtHitbox();
+    ctx.strokeRect(hurt.x, hurt.y, hurt.w, hurt.h);
+
+    const atk = this.getAttackHitbox();
+    if (atk) {
+      ctx.strokeStyle = '#f80';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(atk.x, atk.y, atk.w, atk.h);
+    }
   }
 
   private drawGroundedSprite(

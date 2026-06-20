@@ -1,20 +1,11 @@
-export class Entity {
-  x: number = 0;
-  y: number = 0;
-  width: number = 32;
-  height: number = 48;
-  active: boolean = true;
-  zIndex: number = 0;
+/*
+ * src/engine/Game.ts
+ * ゲームループの制御（更新・描画・HitStop・画面シェイク）
+ * Entityの管理とフレーム毎の update/render を実行する
+ * 関連: Entity.ts（基底クラス）, main.ts（エントリポイント）
+ */
 
-  constructor(x: number = 0, y: number = 0) {
-    this.x = x;
-    this.y = y;
-  }
-
-  update(_dt: number): void {}
-  render(_ctx: CanvasRenderingContext2D): void {}
-  renderOverlay(_ctx: CanvasRenderingContext2D): void {}
-}
+import { Entity } from './Entity';
 
 export class Game {
   private canvas: HTMLCanvasElement;

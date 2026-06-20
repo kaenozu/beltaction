@@ -5,7 +5,7 @@
  * 関連: SpawnSystem（ヒット時に生成）, Enemy, Player
  */
 
-import { Entity } from '../engine/Game';
+import { Entity } from '../engine/Entity';
 
 export class HitEffect extends Entity {
   private timer: number = 0.25;

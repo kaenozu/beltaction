@@ -1,4 +1,11 @@
-import { Entity } from '../engine/Game';
+/*
+ * src/stages/StageManager.ts
+ * ステージのスクロール制御とパララックス背景描画
+ * 3層パララックス（遠景/中景/近景）+ 地面
+ * 関連: Game.ts（setBackground）, main.ts（スクロール連動）
+ */
+
+import { Entity } from '../engine/Entity';
 
 export class StageManager extends Entity {
   private scrollX: number = 0;

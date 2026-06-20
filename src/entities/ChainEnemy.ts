@@ -1,4 +1,11 @@
-import { Entity } from '../engine/Game';
+/*
+ * src/entities/ChainEnemy.ts
+ * チェーン敵（中ボス的な位置づけ）のAI・状態管理・描画
+ * 鎖攻撃・縛り引き寄せ・スイープなど特殊行動を持つ
+ * 関連: Entity.ts, Player.ts（ターゲット）, SpawnSystem.ts（生成）
+ */
+
+import { Entity } from '../engine/Entity';
 import { Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
 import { GRUNT_HITBOX, HitboxConfig, HitboxRect, rectsOverlap, resolveFacingHitbox } from '../systems/HitboxConfig';
@@ -249,10 +256,11 @@ export class ChainEnemy extends Entity {
       player.downHit(this.x, DebugFlags.allowPostGameOverAttacks, this.DOWN_DRAG_DAMAGE, reaction);
     } else if (!player.isDefeated && !player.isWakeupInvincible) {
       const damage = this.state === 'lowSweep' ? this.SWEEP_DAMAGE : this.DOWN_DRAG_DAMAGE;
-      if (!DebugFlags.noPlayerHpDamage) player.health = Math.max(0, player.health - damage);
-      if (player.health <= 0) player.die(this.x);
-      else if (this.state === 'lowSweep') player.tripDown(this.x);
-      else player.hurt(this.x, 'bodyBlow');
+      if (this.state === 'lowSweep') {
+        player.tripDown(this.x, damage);
+      } else {
+        player.takeDamage(damage, this.x, 'bodyBlow');
+      }
     } else {
       return;
     }

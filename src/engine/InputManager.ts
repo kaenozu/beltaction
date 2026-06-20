@@ -1,3 +1,10 @@
+/*
+ * src/engine/InputManager.ts
+ * キーボード入力の管理（P1/P2のキーバインドと状態取得）
+ * 入力フレーム毎のポーリング方式で、エッジ検出は各エンティティが行う
+ * 関連: main.ts（生成）, Player.ts（セット/参照）
+ */
+
 export interface KeyBindings {
   up: string;
   down: string;
