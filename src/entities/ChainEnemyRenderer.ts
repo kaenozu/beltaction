@@ -40,7 +40,7 @@ export class ChainEnemyRenderer {
   }
 
   private drawChain(ctx: CanvasRenderingContext2D): void {
-    if (this.enemy.state !== 'chainShot' && this.enemy.state !== 'boundPull' && this.enemy.state !== 'downDrag') return;
+    if (this.enemy.state !== 'chainShot' && this.enemy.state !== 'boundPull' && this.enemy.state !== 'chainBind' && this.enemy.state !== 'downDrag') return;
     const anchor = this.enemy.getChainAnchor();
     const progress = this.enemy.getChainDrawProgress();
     if (progress <= 0) return;
@@ -125,7 +125,7 @@ export class ChainEnemyRenderer {
     }
     const handX = centerX + facingOffset + this.enemy.facing * 28;
     const handY = torsoY + 22;
-    const attacking = this.enemy.state === 'chainShot' || this.enemy.state === 'boundPull' || this.enemy.state === 'downDrag';
+    const attacking = this.enemy.state === 'chainShot' || this.enemy.state === 'boundPull' || this.enemy.state === 'chainBind' || this.enemy.state === 'downDrag';
     ctx.fillStyle = attacking ? '#e5d283' : '#8f8262';
     ctx.fillRect(handX - 8, handY - 7, 16, 14);
     ctx.strokeStyle = attacking ? '#fff0a5' : '#4b554a';

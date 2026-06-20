@@ -11,7 +11,7 @@ import { DebugFlags } from '../systems/DebugFlags';
 import { GRUNT_HITBOX, HitboxConfig, HitboxRect, rectsOverlap, resolveFacingHitbox } from '../systems/HitboxConfig';
 import { ChainEnemyRenderer } from './ChainEnemyRenderer';
 
-type ChainEnemyState = 'idle' | 'walk' | 'chainShot' | 'boundPull' | 'lowSweep' | 'downDrag' | 'hurt' | 'death';
+type ChainEnemyState = 'idle' | 'walk' | 'chainShot' | 'boundPull' | 'chainBind' | 'lowSweep' | 'downDrag' | 'hurt' | 'death';
 
 export class ChainEnemy extends Entity {
   public health: number = 38;
@@ -50,6 +50,8 @@ export class ChainEnemy extends Entity {
   private readonly ATTACK_COOLDOWN = 1.35;
   private readonly CHAIN_COOLDOWN = 3.1;
   private readonly CHAIN_BIND_DURATION = 0.82;
+  private readonly CHAIN_WRAP_DURATION = 3.0;
+  private readonly CHAIN_WRAP_RANGE = 92;
   private readonly CHAIN_PULL_SPEED = 165;
   private readonly CHAIN_DAMAGE = 3;
   private readonly CHAIN_HITBOX_THICKNESS = 18;
@@ -61,7 +63,7 @@ export class ChainEnemy extends Entity {
 
   get isDead(): boolean { return this.state === 'death'; }
   get isBodyBlowGrappler(): boolean { return false; }
-  get isGrapplingPlayer(): boolean { return this.state === 'boundPull'; }
+  get isGrapplingPlayer(): boolean { return this.state === 'boundPull' || this.state === 'chainBind'; }
 
   constructor(x: number, y: number, private player: () => Player) {
     super(x, y);
@@ -91,6 +93,18 @@ export class ChainEnemy extends Entity {
     if (this.state === 'boundPull') {
       this.velocityX = 0;
       player.pullBoundToward(this.x + this.width / 2, dt);
+      this.chainTargetX = player.x + player.width / 2;
+      this.chainTargetY = player.y + player.height * 0.5;
+      if (this.getBoundDistanceToPlayer(player) <= this.CHAIN_WRAP_RANGE) {
+        this.startChainBind(player);
+      }
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return;
+    }
+
+    if (this.state === 'chainBind') {
+      this.velocityX = 0;
       this.chainTargetX = player.x + player.width / 2;
       this.chainTargetY = player.y + player.height * 0.5;
       this.applyPhysics(dt);
@@ -195,6 +209,10 @@ export class ChainEnemy extends Entity {
     if (this.stateTimer > 0) return;
 
     if (this.state === 'boundPull') {
+      this.startChainBind(this.player());
+      return;
+    }
+    if (this.state === 'chainBind') {
       this.player().releaseBound();
       this.state = 'idle';
       this.attackCooldown = this.ATTACK_COOLDOWN;
@@ -245,6 +263,22 @@ export class ChainEnemy extends Entity {
     this.onHitStop?.(0.085, 0.14, 3);
   }
 
+  private startChainBind(player: Player): void {
+    if (this.state === 'chainBind') return;
+    this.state = 'chainBind';
+    this.stateTimer = this.CHAIN_WRAP_DURATION;
+    this.velocityX = 0;
+    this.currentFrame = 1;
+    this.animTimer = 0;
+    this.chainTargetX = player.x + player.width / 2;
+    this.chainTargetY = player.y + player.height * 0.5;
+    player.startChainWrapped(this.CHAIN_WRAP_DURATION);
+  }
+
+  private getBoundDistanceToPlayer(player: Player): number {
+    return Math.abs((player.x + player.width / 2) - (this.x + this.width / 2));
+  }
+
   private getChainShotHitbox(): HitboxRect {
     const base = this.getChainHitboxBase();
     const anchor = this.getChainAnchor();
@@ -274,6 +308,11 @@ export class ChainEnemy extends Entity {
       this.animTimer = 0;
       return;
     }
+    if (this.state === 'chainBind') {
+      this.currentFrame = 1;
+      this.animTimer = 0;
+      return;
+    }
     this.animTimer += dt;
     if (this.animTimer >= this.ANIM_SPEED) {
       this.animTimer = 0;
@@ -295,7 +334,7 @@ export class ChainEnemy extends Entity {
   }
 
   public getChainAnchor(): { x: number; y: number } {
-    if (this.state === 'chainShot' || this.state === 'boundPull') {
+    if (this.state === 'chainShot' || this.state === 'boundPull' || this.state === 'chainBind') {
       const windup = this.state === 'chainShot' && this.currentFrame === 0;
       return { x: this.x + this.width / 2 + this.facing * 10, y: this.y + (windup ? 52 : 76) };
     }
@@ -313,7 +352,7 @@ export class ChainEnemy extends Entity {
   }
 
   public getChainDrawProgress(): number {
-    if (this.state === 'boundPull') return 1;
+    if (this.state === 'boundPull' || this.state === 'chainBind') return 1;
     if (this.state === 'downDrag') return this.easeOut(Math.min(1, this.getAttackElapsedRatio() / 0.55));
     if (this.state !== 'chainShot') return 0;
     if (this.currentFrame === 0) return 0;

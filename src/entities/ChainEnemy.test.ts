@@ -41,7 +41,7 @@ describe('ChainEnemy', () => {
       player.x = 500;
       enemy.update(0.016);
       expect(enemy.state).toBe('walk');
-      expect(enemy.velocityX).toBeGreaterThan(0);
+      expect((enemy as unknown as { velocityX: number }).velocityX).toBeGreaterThan(0);
     });
 
     it('faces the player', () => {
@@ -52,6 +52,52 @@ describe('ChainEnemy', () => {
       player.x = 200;
       enemy.update(0.016);
       expect(enemy.facing).toBe(1);
+    });
+
+    it('wraps the player after pulling them close enough with the chain', () => {
+      player.x = 180;
+      enemy.x = 100;
+      enemy.state = 'boundPull';
+      enemy.facing = 1;
+      player.startBound(enemy.x + enemy.width / 2, 1, 165, 0);
+
+      enemy.update(0.016);
+
+      expect(enemy.state).toBe('chainBind');
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(true);
+    });
+
+    it('keeps the chain wrap without dealing follow-up body blow damage itself', () => {
+      player.x = 180;
+      enemy.x = 100;
+      enemy.state = 'boundPull';
+      enemy.facing = 1;
+      player.startBound(enemy.x + enemy.width / 2, 1, 165, 0);
+
+      enemy.update(0.016);
+      const healthAfterWrap = player.health;
+      enemy.update(0.7);
+
+      expect(enemy.state).toBe('chainBind');
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(true);
+      expect(player.health).toBe(healthAfterWrap);
+    });
+
+    it('keeps the chain wrap long enough for another enemy to follow up', () => {
+      player.x = 180;
+      enemy.x = 100;
+      enemy.state = 'boundPull';
+      enemy.facing = 1;
+      player.startBound(enemy.x + enemy.width / 2, 1, 165, 0);
+
+      enemy.update(0.016);
+      enemy.update(2.1);
+
+      expect(enemy.state).toBe('chainBind');
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(true);
     });
   });
 

@@ -1,15 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Player } from './Player';
+import { DebugFlags } from '../systems/DebugFlags';
 
 describe('Player', () => {
   let player: Player;
 
   beforeEach(() => {
+    DebugFlags.noPlayerHpDamage = false;
     player = new Player(100, 288);
     player.setInput({
       up: false, down: false, left: false, right: false,
       attack: false, kick: false,
     });
+  });
+
+  afterEach(() => {
+    DebugFlags.noPlayerHpDamage = false;
   });
 
   describe('initial state', () => {
@@ -71,6 +77,16 @@ describe('Player', () => {
       player.takeDamage(10, 50);
       expect(player.health).toBe(0);
     });
+
+    it('enters hurt state without losing health in no-damage debug mode', () => {
+      DebugFlags.noPlayerHpDamage = true;
+
+      const hit = player.takeDamage(20, 50);
+
+      expect(hit).toBe(true);
+      expect(player.health).toBe(100);
+      expect(player.state).toBe('hurt');
+    });
   });
 
   describe('die', () => {
@@ -78,7 +94,7 @@ describe('Player', () => {
       player.die(200);
       expect(player.health).toBe(0);
       expect(player.state).toBe('death');
-      expect(player.stateTimer).toBe(0.5);
+      expect((player as unknown as { stateTimer: number }).stateTimer).toBe(0.5);
       expect(player.isDefeated).toBe(true);
     });
 
@@ -93,7 +109,7 @@ describe('Player', () => {
     it('enters hurt state with correct stun duration', () => {
       player.hurt(50);
       expect(player.state).toBe('hurt');
-      expect(player.stateTimer).toBeGreaterThan(0);
+      expect((player as unknown as { stateTimer: number }).stateTimer).toBeGreaterThan(0);
     });
 
     it('faces toward the attacker when attacker is to the right', () => {
@@ -189,6 +205,79 @@ describe('Player', () => {
       player.startGrabbed(200);
       player.updateGrabbedPosition(300);
       expect(player.x).toBe(258);
+    });
+  });
+
+  describe('bound state', () => {
+    it('can enter a wrapped chain bind while remaining bound', () => {
+      const started = player.startBound(300, 1, 165, 0);
+
+      expect(started).toBe(true);
+      player.startChainWrapped(0.58);
+
+      expect(player.state).toBe('bound');
+      expect(player.isBound).toBe(true);
+      expect(player.isChainWrapped).toBe(true);
+    });
+
+    it('releases the wrapped chain bind when its timer ends', () => {
+      player.startBound(300, 1, 165, 0);
+      player.startChainWrapped(0.1);
+
+      player.update(0.12);
+
+      expect(player.state).toBe('idle');
+      expect(player.isChainWrapped).toBe(false);
+    });
+
+    it('can receive body blows while staying chain wrapped', () => {
+      player.startBound(300, 1, 165, 0);
+      player.startChainWrapped(1.5);
+
+      const hit = player.receiveBoundBodyBlow(300, 7);
+
+      expect(hit).toBe(true);
+      expect(player.health).toBe(93);
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(true);
+    });
+
+    it('can accept a second grappler while chain wrapped', () => {
+      player.startBound(300, 1, 165, 0);
+      player.startChainWrapped(1.5);
+
+      const joined = player.startGrabFollowup(40);
+
+      expect(joined).toBe(true);
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(true);
+      expect(player.isDoubleGrabbed).toBe(true);
+    });
+
+    it('can receive follow-up body blows from a second grappler while chain wrapped', () => {
+      player.startBound(300, 1, 165, 0);
+      player.startChainWrapped(1.5);
+      player.startGrabFollowup(40);
+
+      player.receiveGrabFollowupHit(40, 5);
+
+      expect(player.health).toBe(95);
+      expect(player.state).toBe('bound');
+      expect(player.isDoubleGrabbed).toBe(true);
+    });
+
+    it('shows bound body blow reaction without losing health in no-damage debug mode', () => {
+      DebugFlags.noPlayerHpDamage = true;
+      player.startBound(300, 1, 165, 0);
+      player.startChainWrapped(1.5);
+
+      const hit = player.receiveBoundBodyBlow(300, 7);
+
+      expect(hit).toBe(true);
+      expect(player.health).toBe(100);
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(true);
+      expect(player.chainWrappedImpactRatio).toBe(1);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Enemy } from './Enemy';
 import { Player } from './Player';
 
@@ -13,6 +13,10 @@ describe('Enemy', () => {
       attack: false, kick: false,
     });
     enemy = new Enemy(100, 288, () => player);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('has correct initial values', () => {
@@ -55,7 +59,7 @@ describe('Enemy', () => {
       player.x = 500;
       enemy.update(0.016);
       expect(enemy.state).toBe('walk');
-      expect(enemy.velocityX).toBeGreaterThan(0);
+      expect((enemy as unknown as { velocityX: number }).velocityX).toBeGreaterThan(0);
     });
 
     it('attacks downed player when canReceiveGroundHit is true', () => {
@@ -70,6 +74,67 @@ describe('Enemy', () => {
       enemy.update(0.016);
       expect(enemy.state).toBe('downAttack');
     });
+
+    it('approaches chain-wrapped player to join the grapple', () => {
+      player.x = 300;
+      enemy.x = 180;
+      player.startBound(100, 2, 0, 0);
+      player.startChainWrapped(2);
+
+      enemy.update(0.016);
+
+      expect(enemy.state).toBe('walk');
+      expect((enemy as unknown as { velocityX: number }).velocityX).toBeGreaterThan(0);
+    });
+
+    it('joins a grapple on chain-wrapped player instead of attacking immediately', () => {
+      player.x = 300;
+      enemy.x = 250;
+      player.startBound(100, 2, 0, 0);
+      player.startChainWrapped(2);
+
+      enemy.update(0.016);
+
+      expect(enemy.state).toBe('grabFollowup');
+      expect(enemy.isBodyBlowGrappler).toBe(true);
+      expect(enemy.isGrapplingPlayer).toBe(true);
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(true);
+      expect(player.isDoubleGrabbed).toBe(true);
+    });
+
+    it('body blows chain-wrapped player after joining the grapple', () => {
+      player.x = 300;
+      enemy.x = 250;
+      player.startBound(100, 2, 0, 0);
+      player.startChainWrapped(2);
+
+      enemy.update(0.016);
+      expect(enemy.state).toBe('grabFollowup');
+
+      const healthBefore = player.health;
+      enemy.update(0.42);
+
+      expect(player.health).toBeLessThan(healthBefore);
+      expect(player.state).toBe('bound');
+      expect(player.isDoubleGrabbed).toBe(true);
+    });
+
+    it('does not treat regular body blow as a grappling follow-up', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(1);
+      player.x = 300;
+      enemy.x = 250;
+
+      enemy.update(0.016);
+      enemy.update(0.6);
+      enemy.update(1.5);
+      enemy.update(0.016);
+
+      expect(enemy.state).toBe('bodyBlow');
+      expect(enemy.isBodyBlowGrappler).toBe(false);
+      expect(enemy.isGrapplingPlayer).toBe(false);
+    });
+
   });
 
   describe('hitbox getters', () => {

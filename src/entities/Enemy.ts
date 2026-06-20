@@ -36,6 +36,7 @@ export class Enemy extends Entity {
   private readonly GRAB_FOLLOWUP_TICK_INTERVAL = 0.42;
   private readonly GRAB_FOLLOWUP_DAMAGE = 5;
   private readonly GRAB_FOLLOWUP_JOIN_RANGE = 92;
+  private readonly BOUND_BODY_BLOW_APPROACH_RANGE = 118;
   private readonly BODY_BLOW_DAMAGE = 9;
   private readonly DOWN_ATTACK_DAMAGE = 7;
   private readonly DOWNED_ATTACK_COOLDOWN = 2.1;
@@ -110,6 +111,7 @@ export class Enemy extends Entity {
     if (this.tryGrabBehaviour(player, dt)) return;
     if (this.tryGrabFollowupBehaviour(player, dt)) return;
     if (this.tryAttackBehaviour(player, dt)) return;
+    if (this.tryBoundBodyBlowBehaviour(player, dt)) return;
     if (this.tryRetreatFromDowned(player, dt)) return;
 
     const targetX = this.targetX ?? player.x;
@@ -208,7 +210,7 @@ export class Enemy extends Entity {
 
   private tryGrabFollowupBehaviour(player: Player, dt: number): boolean {
     if (this.state !== 'grabFollowup') return false;
-    if (!player.isGrabbed) {
+    if (!player.isDoubleGrabbed) {
       player.finishGrabFollowup();
       this.state = 'idle';
       this.velocityX = 0;
@@ -226,6 +228,37 @@ export class Enemy extends Entity {
       player.receiveGrabFollowupHit(this.x, this.GRAB_FOLLOWUP_DAMAGE);
       this.onHit?.(player.grabFollowupHitX, player.grabFollowupHitY, true);
       this.onHitStop?.(0.055, 0.08, 2);
+    }
+    this.applyPhysics(dt);
+    this.updateAnimation(dt);
+    return true;
+  }
+
+  private tryBoundBodyBlowBehaviour(player: Player, dt: number): boolean {
+    if (!player.isChainWrapped || this.attackCooldown > 0) return false;
+
+    const centerDx = this.getCenterDxToPlayer(player);
+    const dist = Math.abs(centerDx);
+    const direction = centerDx === 0 ? this.facing : Math.sign(centerDx);
+    this.facing = direction;
+    this.flankTargetX = null;
+    this.tryingGrab = false;
+    if (dist < this.ATTACK_RANGE) {
+      if (player.startGrabFollowup(this.x)) {
+        this.state = 'grabFollowup';
+        this.stateTimer = this.GRAB_FOLLOWUP_DURATION;
+        this.grabFollowupTickTimer = 0;
+        this.velocityX = 0;
+        this.attackHit = false;
+      } else {
+        this.velocityX = 0;
+      }
+    } else if (dist < this.BOUND_BODY_BLOW_APPROACH_RANGE) {
+      this.state = 'walk';
+      this.velocityX = direction * this.MOVE_SPEED * 0.95;
+    } else {
+      this.state = 'walk';
+      this.velocityX = direction * this.MOVE_SPEED;
     }
     this.applyPhysics(dt);
     this.updateAnimation(dt);
@@ -251,6 +284,8 @@ export class Enemy extends Entity {
     if (player.canReceiveGroundHit || player.canBeKnockedDownByFollowup || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
       player.downHit(this.x, DebugFlags.allowPostGameOverAttacks, this.currentAttackDamage, this.currentDownHitReaction);
       this.attackCooldown = Math.max(this.attackCooldown, this.DOWNED_ATTACK_COOLDOWN);
+    } else if (player.isChainWrapped && this.currentAttackReaction === 'bodyBlow') {
+      player.receiveBoundBodyBlow(this.x + this.width / 2, this.currentAttackDamage);
     } else {
       player.takeDamage(this.currentAttackDamage, this.x, this.currentAttackReaction);
     }
@@ -364,6 +399,11 @@ export class Enemy extends Entity {
     }
 
     const attackKind = this.nextStandingAttackKind();
+    this.startStandingAttack(attackKind);
+    return true;
+  }
+
+  private startStandingAttack(attackKind: StandingAttackKind): void {
     this.state = attackKind === 'heavy' ? 'heavyAttack' : attackKind === 'bodyBlow' ? 'bodyBlow' : 'attack';
     this.stateTimer = attackKind === 'heavy' ? 0.58 : attackKind === 'bodyBlow' ? 0.54 : 0.4;
     this.animTimer = 0;
@@ -375,7 +415,10 @@ export class Enemy extends Entity {
     this.currentAttackReaction = this.getStandingAttackReaction(attackKind);
     this.currentDownHitReaction = attackKind === 'heavy' ? 'launch' : this.nextDownHitReaction();
     this.currentAttackDamage = attackKind === 'heavy' ? 12 : attackKind === 'bodyBlow' ? this.BODY_BLOW_DAMAGE : this.damage;
-    return true;
+  }
+
+  private getCenterDxToPlayer(player: Player): number {
+    return (player.x + player.width / 2) - (this.x + this.width / 2);
   }
 
   private tryCooldownStrafe(player: Player, dx: number, dist: number): boolean {

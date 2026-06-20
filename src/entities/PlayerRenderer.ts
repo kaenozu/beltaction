@@ -18,6 +18,7 @@ export class PlayerRenderer {
     ctx.translate(this.player.x + this.player.width / 2, 0);
     ctx.scale(this.player.facing, 1);
     this.renderSprite(ctx);
+    if (this.player.isChainWrapped) this.drawChainWrap(ctx);
     ctx.restore();
     ctx.fillStyle = '#fff';
     ctx.font = '12px monospace';
@@ -76,6 +77,92 @@ export class PlayerRenderer {
       const sx = 1 * this.player.frameWidth;
       ctx.drawImage(this.player.hurtImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
     }
+  }
+
+  private drawChainWrap(ctx: CanvasRenderingContext2D): void {
+    const progress = this.player.chainWrappedProgress;
+    const impact = this.player.chainWrappedImpactRatio;
+    const cinch = 1 - impact * 0.08;
+    const alpha = 0.78 + Math.sin(progress * Math.PI * 5) * 0.05;
+    const bands = [
+      { y: this.player.y + 78, tilt: 10, width: 58 },
+      { y: this.player.y + 92, tilt: -12, width: 72 },
+      { y: this.player.y + 106, tilt: 10, width: 76 },
+      { y: this.player.y + 120, tilt: -8, width: 62 },
+    ];
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 2;
+    this.drawWrapSideRing(ctx, -39 * cinch, this.player.y + 99, 11, 33, -0.18);
+    this.drawWrapSideRing(ctx, 39 * cinch, this.player.y + 99, 11, 33, 0.18);
+    for (const band of bands) {
+      const width = band.width * cinch;
+      this.drawChainBand(ctx, -width / 2, band.y - band.tilt / 2, width / 2, band.y + band.tilt / 2);
+    }
+    if (impact > 0) {
+      ctx.globalAlpha = impact * 0.55;
+      ctx.strokeStyle = '#ffefe0';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.ellipse(0, this.player.y + 99, 28, 18, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#bd3f36';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-15, this.player.y + 96);
+      ctx.lineTo(15, this.player.y + 102);
+      ctx.moveTo(-13, this.player.y + 106);
+      ctx.lineTo(12, this.player.y + 92);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawChainBand(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const linkStep = 10;
+
+    ctx.save();
+    ctx.translate(x1, y1);
+    ctx.rotate(angle);
+    ctx.strokeStyle = 'rgba(22, 13, 10, 0.85)';
+    ctx.lineWidth = 3.6;
+    ctx.beginPath();
+    ctx.moveTo(0, 1.5);
+    ctx.lineTo(length, 1.5);
+    ctx.stroke();
+    for (let x = 0; x <= length; x += linkStep) {
+      ctx.save();
+      ctx.translate(x, 0);
+      ctx.rotate((x / linkStep) % 2 === 0 ? 0.35 : -0.35);
+      ctx.strokeStyle = '#332118';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(-3.7, -2.7, 7.4, 5.4);
+      ctx.strokeStyle = '#d9c982';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(-2.6, -1.7, 5.2, 3.4);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  private drawWrapSideRing(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, rotation: number): void {
+    ctx.save();
+    ctx.strokeStyle = '#2c1b14';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, rotation, -Math.PI * 0.34, Math.PI * 0.34);
+    ctx.stroke();
+    ctx.strokeStyle = '#d9c982';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx - 2, ry - 2, rotation, -Math.PI * 0.34, Math.PI * 0.34);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private renderDownHitSprite(ctx: CanvasRenderingContext2D): void {

@@ -32,7 +32,7 @@ function createMockCanvas(): HTMLCanvasElement {
     drawImage: () => {},
     setLineDash: () => {},
   } as unknown as CanvasRenderingContext2D;
-  canvas.getContext = () => mockCtx;
+  Object.defineProperty(canvas, 'getContext', { value: () => mockCtx });
   return canvas;
 }
 
@@ -80,5 +80,7 @@ describe('Game', () => {
     let called = false;
     game.onFrame = () => { called = true; };
     expect(game.onFrame).toBeDefined();
+    game.onFrame?.();
+    expect(called).toBe(true);
   });
 });
