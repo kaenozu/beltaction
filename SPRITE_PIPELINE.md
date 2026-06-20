@@ -65,3 +65,33 @@ Current preferred local processing for generated walk frames:
 python tools/pixelize_sprite.py <frame.png> <out.png> --remove-bg --palette public/assets/maki_idle.png --content-scale 0.92 --fit-resample lanczos
 python tools/combine_spritesheet.py <frame1.png> <frame2.png> <frame3.png> <frame4.png> -o public/assets/maki_spritesheet_generated.png
 ```
+
+## Runtime Asset Boundary
+
+Keep `public/assets/` limited to files that the game loads directly or legacy files still intentionally kept for comparison. Put generated alternates and rejected candidates under `assets/<character>/generated-candidates/` so the runtime folder stays readable.
+
+Current Maki runtime assets loaded by `src/main.ts`:
+
+- `public/assets/maki_idle_generated_v2_despill.png`
+- `public/assets/maki_pinch_idle_generated_despill.png`
+- `public/assets/maki_walk_hairsway_stabilized_despill.png`
+- `public/assets/maki_attack_generated_despill_hairfix.png`
+- `public/assets/maki_kick_generated_despill.png`
+- `public/assets/maki_jump_generated_despill.png`
+- `public/assets/maki_hurt_generated_despill.png`
+- `public/assets/maki_hagai_victim_generated_fit.png`
+- `public/assets/maki_death_generated_despill.png`
+- `public/assets/maki_down_generated_despill.png`
+- `public/assets/maki_downhit_generated_despill.png`
+- `public/assets/maki_getup_generated_despill.png`
+
+Current enemy runtime assets loaded by `src/main.ts`:
+
+- `public/assets/grunt_spritesheet_generated_despill.png`
+- `public/assets/grunt_hurt_generated_despill.png`
+- `public/assets/grunt_heavy_generated_despill.png`
+- `public/assets/grunt_bodyblow_generated_despill.png`
+- `public/assets/chain_enemy_spritesheet_generated.png`
+- `public/assets/chain_projectile_generated.png`
+
+The current Maki alternate candidates have been moved to `assets/maki/generated-candidates/`.
