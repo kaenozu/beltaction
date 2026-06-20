@@ -20,7 +20,8 @@ import gruntUrl from '/assets/grunt_spritesheet_generated_despill.png';
 import gruntHurtUrl from '/assets/grunt_hurt_generated_despill.png';
 import gruntHeavyUrl from '/assets/grunt_heavy_generated_despill.png';
 import gruntBodyBlowUrl from '/assets/grunt_bodyblow_generated_despill.png';
-import chainEnemyUrl from '/assets/chain_enemy_spritesheet_generated.png';
+import chainEnemyUrl from '/assets/chain_enemy_spritesheet_chainclear.png';
+import chainProjectileUrl from '/assets/chain_projectile_generated.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -139,6 +140,12 @@ const chainEnemySheet = new Image();
 chainEnemySheet.src = chainEnemyUrl;
 chainEnemySheet.onload = () => {
   spawner.chainSpriteImage = chainEnemySheet;
+};
+
+const chainProjectileImg = new Image();
+chainProjectileImg.src = chainProjectileUrl;
+chainProjectileImg.onload = () => {
+  spawner.chainProjectileImage = chainProjectileImg;
 };
 
 game.setBackground(stage);

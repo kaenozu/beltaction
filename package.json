@@ -9,16 +9,17 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit"
   },
-  "keywords": ["game", "beat-em-up", "final-fight"],
+  "keywords": [
+    "game",
+    "beat-em-up",
+    "final-fight"
+  ],
   "author": "",
   "license": "MIT",
   "type": "module",
   "devDependencies": {
+    "playwright": "^1.61.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "@types/howler": "^2.2.7"
-  },
-  "dependencies": {
-    "howler": "^2.2.4"
+    "vite": "^8.0.16"
   }
 }

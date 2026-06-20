@@ -11,6 +11,7 @@ export class ChainEnemy extends Entity {
   public hurtImage: HTMLImageElement | null = null;
   public heavyAttackImage: HTMLImageElement | null = null;
   public bodyBlowImage: HTMLImageElement | null = null;
+  public chainImage: HTMLImageElement | null = null;
   public useFallbackDetails: boolean = false;
   public onHit: ((x: number, y: number, overlay?: boolean) => void) | null = null;
   public onHitStop: ((duration: number, shakeDuration?: number, shakeMagnitude?: number) => void) | null = null;
@@ -26,6 +27,7 @@ export class ChainEnemy extends Entity {
   private facing: number = -1;
   private currentFrame: number = 0;
   private animTimer: number = 0;
+  private attackDuration: number = 0;
   private chainTargetX: number = 0;
   private chainTargetY: number = 0;
   private readonly FRAME_WIDTH = 160;
@@ -42,6 +44,7 @@ export class ChainEnemy extends Entity {
   private readonly CHAIN_BIND_DURATION = 0.82;
   private readonly CHAIN_PULL_SPEED = 165;
   private readonly CHAIN_DAMAGE = 3;
+  private readonly CHAIN_HITBOX_THICKNESS = 18;
   private readonly SWEEP_DAMAGE = 8;
   private readonly DOWN_DRAG_DAMAGE = 6;
   private readonly ANIM_SPEED = 0.24;
@@ -159,11 +162,11 @@ export class ChainEnemy extends Entity {
 
   override render(ctx: CanvasRenderingContext2D): void {
     this.drawShadow(ctx);
-    this.drawChain(ctx);
 
     if (!this.spriteImage) {
       ctx.fillStyle = '#465842';
       ctx.fillRect(this.x, this.y, this.width, this.height);
+      this.drawChain(ctx);
       this.renderLabels(ctx);
       return;
     }
@@ -183,6 +186,7 @@ export class ChainEnemy extends Entity {
     ctx.restore();
 
     if (this.useFallbackDetails) this.drawSignatureDetails(ctx);
+    this.drawChain(ctx);
     this.renderLabels(ctx);
     this.renderDebugHitboxes(ctx);
   }
@@ -190,6 +194,7 @@ export class ChainEnemy extends Entity {
   private startAttack(state: 'chainShot' | 'lowSweep' | 'downDrag', duration: number, cooldown: number): void {
     this.state = state;
     this.stateTimer = duration;
+    this.attackDuration = duration;
     this.attackCooldown = cooldown;
     if (state === 'chainShot') this.chainCooldown = cooldown;
     this.velocityX = 0;
@@ -226,8 +231,8 @@ export class ChainEnemy extends Entity {
     if (this.currentFrame !== 1 || this.attackHit) return;
     const atk = this.getAttackHitbox();
     const hurt = player.getHurtHitbox();
-    this.attackHit = true;
     if (!atk || !rectsOverlap(atk, hurt)) return;
+    this.attackHit = true;
 
     if (this.state === 'chainShot') {
       if (player.startBound(this.x + this.width / 2, this.CHAIN_BIND_DURATION, this.CHAIN_PULL_SPEED, this.CHAIN_DAMAGE)) {
@@ -257,13 +262,20 @@ export class ChainEnemy extends Entity {
   }
 
   private getChainShotHitbox(): HitboxRect {
-    const startX = this.x + this.width / 2;
+    const base = this.getChainHitboxBase();
+    const anchor = this.getChainAnchor();
+    const startX = base.x;
+    const startY = base.y;
     const endX = this.chainTargetX;
+    const endY = this.chainTargetY;
+    const visibleEndX = anchor.x + (endX - anchor.x) * this.getChainDrawProgress();
+    const visibleEndY = anchor.y + (endY - anchor.y) * this.getChainDrawProgress();
+    const halfThickness = this.CHAIN_HITBOX_THICKNESS / 2;
     return {
-      x: Math.min(startX, endX),
-      y: this.y + 74,
-      w: Math.max(36, Math.abs(endX - startX)),
-      h: 58,
+      x: Math.min(startX, visibleEndX) - halfThickness,
+      y: Math.min(startY, visibleEndY) - halfThickness,
+      w: Math.max(this.CHAIN_HITBOX_THICKNESS, Math.abs(visibleEndX - startX) + this.CHAIN_HITBOX_THICKNESS),
+      h: Math.max(this.CHAIN_HITBOX_THICKNESS, Math.abs(visibleEndY - startY) + this.CHAIN_HITBOX_THICKNESS),
     };
   }
 
@@ -300,10 +312,17 @@ export class ChainEnemy extends Entity {
 
   private drawChain(ctx: CanvasRenderingContext2D): void {
     if (this.state !== 'chainShot' && this.state !== 'boundPull' && this.state !== 'downDrag') return;
-    const startX = this.x + this.width / 2 + this.facing * 24;
-    const startY = this.y + 88;
-    const endX = this.chainTargetX;
-    const endY = this.chainTargetY;
+    const anchor = this.getChainAnchor();
+    const progress = this.getChainDrawProgress();
+    if (progress <= 0) return;
+    const startX = anchor.x;
+    const startY = anchor.y;
+    const endX = startX + (this.chainTargetX - startX) * progress;
+    const endY = startY + (this.chainTargetY - startY) * progress;
+    if (this.chainImage) {
+      this.drawSpriteChain(ctx, startX, startY, endX, endY);
+      return;
+    }
     ctx.save();
     ctx.strokeStyle = '#b7c0aa';
     ctx.lineWidth = 3;
@@ -319,6 +338,79 @@ export class ChainEnemy extends Entity {
     ctx.moveTo(startX, startY + 4);
     ctx.lineTo(endX, endY + 4);
     ctx.stroke();
+    ctx.restore();
+  }
+
+  private getChainAnchor(): { x: number; y: number } {
+    if (this.state === 'chainShot' || this.state === 'boundPull') {
+      const windup = this.state === 'chainShot' && this.currentFrame === 0;
+      return {
+        x: this.x + this.width / 2 + this.facing * 10,
+        y: this.y + (windup ? 52 : 76),
+      };
+    }
+    if (this.state === 'downDrag') {
+      return {
+        x: this.x + this.width / 2 + this.facing * 54,
+        y: this.y + 128,
+      };
+    }
+    return {
+      x: this.x + this.width / 2 + this.facing * 66,
+      y: this.y + 86,
+    };
+  }
+
+  private getChainHitboxBase(): { x: number; y: number } {
+    if (this.state === 'chainShot') {
+      return {
+        x: this.x + this.width / 2 + this.facing * 10,
+        y: this.y + 76,
+      };
+    }
+    return this.getChainAnchor();
+  }
+
+  private getChainDrawProgress(): number {
+    if (this.state === 'boundPull') return 1;
+    if (this.state === 'downDrag') return this.easeOut(Math.min(1, this.getAttackElapsedRatio() / 0.55));
+    if (this.state !== 'chainShot') return 0;
+    if (this.currentFrame === 0) return 0;
+    return this.easeOut(Math.min(1, this.animTimer / (this.ANIM_SPEED * 0.65)));
+  }
+
+  private getAttackElapsedRatio(): number {
+    if (this.attackDuration <= 0) return 1;
+    return Math.max(0, Math.min(1, 1 - this.stateTimer / this.attackDuration));
+  }
+
+  private easeOut(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  private drawSpriteChain(ctx: CanvasRenderingContext2D, startX: number, startY: number, endX: number, endY: number): void {
+    if (!this.chainImage) return;
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const length = Math.hypot(dx, dy);
+    if (length < 12) return;
+
+    const tileW = 32;
+    const tipW = 48;
+    const h = 18;
+    const bodyLength = Math.max(0, length - tipW + 8);
+
+    ctx.save();
+    ctx.translate(startX, startY);
+    ctx.rotate(Math.atan2(dy, dx));
+
+    for (let x = 0; x < bodyLength; x += tileW) {
+      const drawW = Math.min(tileW, bodyLength - x + 4);
+      ctx.drawImage(this.chainImage, 0, 0, tileW, h, x, -h / 2, drawW, h);
+    }
+
+    ctx.drawImage(this.chainImage, tileW, 0, tipW, h, Math.max(0, length - tipW), -h / 2, tipW, h);
     ctx.restore();
   }
 

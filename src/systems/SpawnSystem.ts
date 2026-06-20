@@ -16,6 +16,7 @@ export class SpawnSystem extends Entity {
   private _heavyAttackImage: HTMLImageElement | null = null;
   private _bodyBlowImage: HTMLImageElement | null = null;
   private _chainSpriteImage: HTMLImageElement | null = null;
+  private _chainProjectileImage: HTMLImageElement | null = null;
   private playerAttackHits: Set<EnemyActor> = new Set();
   private effects: HitEffect[] = [];
   private readonly ENGAGE_OFFSETS = [54, -54, 104, -104, 18, -18, 148, -148];
@@ -45,6 +46,14 @@ export class SpawnSystem extends Entity {
         enemy.spriteImage = img ?? this._spriteImage;
         enemy.useFallbackDetails = img === null;
       }
+    }
+  }
+
+  get chainProjectileImage(): HTMLImageElement | null { return this._chainProjectileImage; }
+  set chainProjectileImage(img: HTMLImageElement | null) {
+    this._chainProjectileImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof ChainEnemy) enemy.chainImage = img;
     }
   }
 
@@ -174,6 +183,7 @@ export class SpawnSystem extends Entity {
       : this.spriteImage;
     if (enemy instanceof ChainEnemy) {
       enemy.useFallbackDetails = this.chainSpriteImage === null;
+      enemy.chainImage = this.chainProjectileImage;
     }
     enemy.hurtImage = this.hurtImage;
     enemy.heavyAttackImage = this.heavyAttackImage;
