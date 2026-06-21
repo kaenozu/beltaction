@@ -17,12 +17,7 @@ export class PlayerRenderer {
     ctx.save();
     ctx.translate(this.player.x + this.player.width / 2, 0);
     ctx.scale(this.player.facing, 1);
-    if (this.player.damageStage >= 2) {
-      const a = this.player.damageStage === 2 ? 0.3 : 0.6;
-      ctx.translate(0, Math.sin(performance.now() * 0.015) * a);
-    }
     this.renderSprite(ctx);
-    this.drawDamageEffects(ctx);
     if (this.player.isChainWrapped && this.player.isBoundBodyBlowHurt) this.drawChainWrap(ctx);
     ctx.restore();
     if (DebugFlags.showDebugLabels) {
@@ -220,41 +215,6 @@ export class PlayerRenderer {
     ctx.ellipse(this.player.x + this.player.width / 2, groundY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-  }
-
-  private drawDamageEffects(ctx: CanvasRenderingContext2D): void {
-    const stage = this.player.damageStage;
-    if (stage === 0) return;
-
-    const h = this.player.frameHeight;
-    const faceY = this.player.y + h * 0.26;
-    const noseX = 10;
-
-    if (stage >= 1) {
-      ctx.fillStyle = 'rgba(240, 160, 160, 0.20)';
-      ctx.beginPath();
-      ctx.ellipse(-noseX - 8, faceY + 8, 7, 5, 0, 0, Math.PI * 2);
-      ctx.ellipse(noseX + 8, faceY + 8, 7, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    if (stage >= 1) {
-      const count = stage === 1 ? 1 : stage === 2 ? 2 : 3;
-      for (let i = 0; i < count; i++) {
-        const angle = performance.now() * 0.003 + i * 2.1;
-        const dx = Math.cos(angle) * (6 + i * 4);
-        const dy = Math.sin(angle * 0.7) * 3 + i * 4;
-        ctx.fillStyle = `rgba(180, 210, 240, ${0.7 - i * 0.15})`;
-        ctx.beginPath();
-        ctx.ellipse(-noseX + dx - 4, faceY - 14 + dy, 2, 2.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    if (stage >= 2) {
-      ctx.fillStyle = 'rgba(100, 80, 80, 0.06)';
-      ctx.fillRect(-80, this.player.y, 160, h);
-    }
   }
 
   private drawBoundResistanceGauge(ctx: CanvasRenderingContext2D): void {
