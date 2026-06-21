@@ -9,6 +9,7 @@ import { CANVAS_HEIGHT, STAGE_WIDTH } from '../engine/Constants';
 import { Entity } from '../engine/Entity';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
+import { playHurtLight, playHurtHeavy, playDeath, playDownHit, playGrab, playChainBind } from '../systems/SoundManager';
 import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 import {
   type HitReactionType,
@@ -167,6 +168,12 @@ export class Player extends Entity {
   get boundEscapeRatio(): number { return Math.max(0, Math.min(1, this.boundEscapeProgress / this.BOUND_ESCAPE_REQUIRED)); }
   private get canBeInteractedWith(): boolean {
     return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isBound && !this.isWakeupInvincible;
+  }
+  get damageStage(): number {
+    if (this.health > 70) return 0;
+    if (this.health > 40) return 1;
+    if (this.health > 15) return 2;
+    return 3;
   }
   get canBeGrabbed(): boolean { return this.canBeInteractedWith; }
   get canBeBound(): boolean { return this.canBeInteractedWith; }
@@ -459,6 +466,7 @@ export class Player extends Entity {
   
   public die(fromX: number): void {
     if (this.isDefeated) return;
+    playDeath();
     this.health = 0;
     this.setState('death');
     this.stateTimer = 0.5;
@@ -480,6 +488,7 @@ export class Player extends Entity {
   }
 
   public downHit(fromX: number, force: boolean = false, damage: number = 0, reaction: DownHitReactionType = 'body'): void {
+    playDownHit();
     if (!force && !this.canReceiveGroundHit && !this.canBeKnockedDownByFollowup) return;
     if (force && !this.canReceivePostGameHit) return;
     if (force) {
@@ -515,6 +524,7 @@ export class Player extends Entity {
 
   public tripDown(fromX: number, damage: number = 0): void {
     if (this.isDefeated || this.isDowned || this.isGrabbed || this.isBound) return;
+    playDownHit();
     if (!DebugFlags.noPlayerHpDamage && damage > 0) {
       this.health = Math.max(0, this.health - damage);
       if (this.health <= 0) {
@@ -550,6 +560,7 @@ export class Player extends Entity {
 
   public hurt(fromX?: number, reaction: HitReactionType = 'light'): void {
     if (this.state === 'grabbed') return;
+    if (reaction === 'light') playHurtLight(); else playHurtHeavy();
     this.setState('hurt');
     this.stateTimer = HURT_STUN_BY_REACTION[reaction] + (this.isLowHealth ? LOW_HEALTH_HURT_STUN_BONUS : 0);
     this.currentHitReaction = reaction;
@@ -587,6 +598,7 @@ export class Player extends Entity {
 
   public startGrabbed(grabberX: number): void {
     if (!this.canBeGrabbed) return;
+    playGrab();
     this.grabberX = grabberX;
     this.grabOffsetX = grabberX > this.x ? -42 : 42;
     this.facing = grabberX > this.x ? 1 : -1;
@@ -607,6 +619,7 @@ export class Player extends Entity {
 
   public startBound(attackerX: number, duration: number, pullSpeed: number, damage: number, force: boolean = false): boolean {
     if (!force && !this.canBeBound) return false;
+    playChainBind();
     if (!DebugFlags.noPlayerHpDamage && damage > 0 && this.health > 0) {
       this.health = Math.max(0, this.health - damage);
       if (this.health <= 0) {
@@ -641,6 +654,7 @@ export class Player extends Entity {
 
   public startChainWrapped(duration: number): void {
     if (this.state !== 'bound') return;
+    playChainBind();
     this.chainWrapped = true;
     this.chainWrappedDuration = duration;
     this.boundReadyForFollowup = true;
