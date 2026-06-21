@@ -112,6 +112,7 @@ export class EnemyRenderer {
   }
 
   private renderHUD(ctx: CanvasRenderingContext2D): void {
+    if (!DebugFlags.showDebugLabels) return;
     ctx.fillStyle = '#fff';
     ctx.font = '10px monospace';
     ctx.fillText(`HP:${this.enemy.health}`, this.enemy.x, this.enemy.y - 5);

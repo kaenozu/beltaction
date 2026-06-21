@@ -49,26 +49,25 @@ base.paste(shadow, (mx - 10 + 5, my - 10 + 5), shadow)
 base.paste(maki_resized, (mx, my), maki_resized)
 
 # Add title text
-try:
-    title_font = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 72)
-except:
-    try:
-        title_font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 72)
-    except:
-        title_font = ImageFont.load_default()
+FONT_PATHS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    "C:\\Windows\\Fonts\\arialbd.ttf",
+    "C:\\Windows\\Fonts\\arial.ttf",
+]
 
-try:
-    sub_font = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 28)
-except:
-    try:
-        sub_font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 28)
-    except:
-        sub_font = ImageFont.load_default()
+def load_font(size):
+    for path in FONT_PATHS:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
 
-try:
-    small_font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 16)
-except:
-    small_font = ImageFont.load_default()
+title_font = load_font(72)
+sub_font = load_font(28)
+small_font = load_font(16)
 
 # Title on left side
 title_text = "MAKI"

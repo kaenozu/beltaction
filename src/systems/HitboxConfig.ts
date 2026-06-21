@@ -51,9 +51,9 @@ export function resolveFacingHitbox(
 }
 
 // JSONファイルが真実のソース
-export const MAKI_HITBOX: HitboxConfig = makiData as HitboxConfig;
-export const GRUNT_HITBOX: HitboxConfig = gruntData as HitboxConfig;
-export const CHAIN_HITBOX: HitboxConfig = chainData as HitboxConfig;
+export const MAKI_HITBOX = makiData satisfies HitboxConfig;
+export const GRUNT_HITBOX = gruntData satisfies HitboxConfig;
+export const CHAIN_HITBOX = chainData satisfies HitboxConfig;
 
 export function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;

@@ -9,7 +9,7 @@ describe('InputManager', () => {
   });
 
   afterEach(() => {
-    // Clean up event listeners added by InputManager constructor
+    input.dispose();
   });
 
   it('returns default state for unknown player', () => {

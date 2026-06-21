@@ -35,76 +35,72 @@ export class SpawnSystem extends Entity {
   private readonly POST_GAME_PRESSURE_OFFSETS = [44, -44, 82, -82, 120, -120, 158, -158];
   private readonly GROUND_Y = CANVAS_HEIGHT - PLAYER_FRAME_HEIGHT;
   
+  private syncImagesToEnemies(): void {
+    for (const enemy of this.enemies) {
+      enemy.spriteImage = enemy instanceof ChainEnemy
+        ? (this._chainSpriteImage ?? this._spriteImage)
+        : this._spriteImage;
+      if (enemy instanceof ChainEnemy) {
+        enemy.useFallbackDetails = this._chainSpriteImage === null;
+        enemy.chainImage = this._chainProjectileImage;
+        enemy.hurtImage = this._chainHurtImage;
+        enemy.deathImage = this._chainDeathImage;
+        enemy.heavyAttackImage = this._heavyAttackImage;
+        enemy.bodyBlowImage = this._bodyBlowImage;
+      } else {
+        enemy.hurtImage = this._hurtImage;
+        enemy.heavyAttackImage = this._heavyAttackImage;
+        enemy.bodyBlowImage = this._bodyBlowImage;
+      }
+    }
+  }
+
   get spriteImage(): HTMLImageElement | null { return this._spriteImage; }
   set spriteImage(img: HTMLImageElement | null) {
     this._spriteImage = img;
-    for (const enemy of this.enemies) {
-      enemy.spriteImage = enemy instanceof ChainEnemy
-        ? (this._chainSpriteImage ?? img)
-        : img;
-      if (enemy instanceof ChainEnemy) {
-        enemy.useFallbackDetails = this._chainSpriteImage === null;
-      }
-    }
+    this.syncImagesToEnemies();
   }
 
   get chainSpriteImage(): HTMLImageElement | null { return this._chainSpriteImage; }
   set chainSpriteImage(img: HTMLImageElement | null) {
     this._chainSpriteImage = img;
-    for (const enemy of this.enemies) {
-      if (enemy instanceof ChainEnemy) {
-        enemy.spriteImage = img ?? this._spriteImage;
-        enemy.useFallbackDetails = img === null;
-      }
-    }
+    this.syncImagesToEnemies();
   }
 
   get chainHurtImage(): HTMLImageElement | null { return this._chainHurtImage; }
   set chainHurtImage(img: HTMLImageElement | null) {
     this._chainHurtImage = img;
-    for (const enemy of this.enemies) {
-      if (enemy instanceof ChainEnemy) enemy.hurtImage = img;
-    }
+    this.syncImagesToEnemies();
   }
 
   get chainDeathImage(): HTMLImageElement | null { return this._chainDeathImage; }
   set chainDeathImage(img: HTMLImageElement | null) {
     this._chainDeathImage = img;
-    for (const enemy of this.enemies) {
-      if (enemy instanceof ChainEnemy) enemy.deathImage = img;
-    }
+    this.syncImagesToEnemies();
   }
 
   get chainProjectileImage(): HTMLImageElement | null { return this._chainProjectileImage; }
   set chainProjectileImage(img: HTMLImageElement | null) {
     this._chainProjectileImage = img;
-    for (const enemy of this.enemies) {
-      if (enemy instanceof ChainEnemy) enemy.chainImage = img;
-    }
+    this.syncImagesToEnemies();
   }
 
   get hurtImage(): HTMLImageElement | null { return this._hurtImage; }
   set hurtImage(img: HTMLImageElement | null) {
     this._hurtImage = img;
-    for (const enemy of this.enemies) {
-      enemy.hurtImage = img;
-    }
+    this.syncImagesToEnemies();
   }
 
   get heavyAttackImage(): HTMLImageElement | null { return this._heavyAttackImage; }
   set heavyAttackImage(img: HTMLImageElement | null) {
     this._heavyAttackImage = img;
-    for (const enemy of this.enemies) {
-      enemy.heavyAttackImage = img;
-    }
+    this.syncImagesToEnemies();
   }
 
   get bodyBlowImage(): HTMLImageElement | null { return this._bodyBlowImage; }
   set bodyBlowImage(img: HTMLImageElement | null) {
     this._bodyBlowImage = img;
-    for (const enemy of this.enemies) {
-      enemy.bodyBlowImage = img;
-    }
+    this.syncImagesToEnemies();
   }
   
   constructor(

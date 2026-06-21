@@ -29,6 +29,8 @@ export class InputManager {
   private states: Map<string, InputState> = new Map();
   private bindings: Map<string, KeyBindings> = new Map();
   private keyToPlayerId: Map<string, string> = new Map();
+  private boundHandleKeyDown: (e: KeyboardEvent) => void;
+  private boundHandleKeyUp: (e: KeyboardEvent) => void;
   
   constructor() {
     this.bindings.set('player1', {
@@ -40,9 +42,16 @@ export class InputManager {
       attack: 'o', kick: 'p', jump: 'ArrowUp'
     });
     this.rebuildKeyMap();
-    
-    window.addEventListener('keydown', this.handleKeyDown.bind(this));
-    window.addEventListener('keyup', this.handleKeyUp.bind(this));
+
+    this.boundHandleKeyDown = this.handleKeyDown.bind(this);
+    this.boundHandleKeyUp = this.handleKeyUp.bind(this);
+    window.addEventListener('keydown', this.boundHandleKeyDown);
+    window.addEventListener('keyup', this.boundHandleKeyUp);
+  }
+
+  dispose(): void {
+    window.removeEventListener('keydown', this.boundHandleKeyDown);
+    window.removeEventListener('keyup', this.boundHandleKeyUp);
   }
   
   private rebuildKeyMap(): void {

@@ -20,11 +20,13 @@ export class PlayerRenderer {
     this.renderSprite(ctx);
     if (this.player.isChainWrapped && this.player.isBoundBodyBlowHurt) this.drawChainWrap(ctx);
     ctx.restore();
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px monospace';
-    ctx.fillText(`${this.player.state.toUpperCase()} [${this.player.currentFrame}] r=${this.player.rapidCount}`, this.player.x, this.player.y - 5);
+    if (DebugFlags.showDebugLabels) {
+      ctx.fillStyle = '#fff';
+      ctx.font = '12px monospace';
+      ctx.fillText(`${this.player.state.toUpperCase()} [${this.player.currentFrame}] r=${this.player.rapidCount}`, this.player.x, this.player.y - 5);
+    }
     this.renderDebugHitboxes(ctx);
-    if ((this.player.state === 'bound' || this.player.state === 'grabbed') && this.player.health > 0) this.drawBoundResistanceGauge(ctx);
+    if (this.player.health > 0 && DebugFlags.showDebugLabels) this.drawBoundResistanceGauge(ctx);
   }
 
   private renderSprite(ctx: CanvasRenderingContext2D): void {

@@ -58,38 +58,28 @@ draw.rectangle([40, HEIGHT-110, WIDTH-40, HEIGHT-106], fill=(100, 20, 0))
 draw.rectangle([50, 64, 54, HEIGHT-110], fill=(140, 30, 0))
 draw.rectangle([WIDTH-54, 64, WIDTH-50, HEIGHT-110], fill=(140, 30, 0))
 
-# Load fonts - try bold fonts first
-font_paths = [
+# Load fonts - try system fonts with fallback
+FONT_PATHS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
     "C:\\Windows\\Fonts\\arialbd.ttf",
     "C:\\Windows\\Fonts\\arialbi.ttf",
     "C:\\Windows\\Fonts\\arial.ttf",
     "C:\\Windows\\Fonts\\calibrib.ttf",
 ]
 
-try:
-    # Main title font - very large
-    title_font = ImageFont.truetype(font_paths[0], 120)
-except:
-    try:
-        title_font = ImageFont.truetype(font_paths[1], 120)
-    except:
-        title_font = ImageFont.truetype(font_paths[2], 120)
+def load_font(size):
+    for path in FONT_PATHS:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
 
-try:
-    sub_font = ImageFont.truetype(font_paths[0], 32)
-except:
-    try:
-        sub_font = ImageFont.truetype(font_paths[1], 32)
-    except:
-        sub_font = ImageFont.truetype(font_paths[2], 32)
-
-try:
-    small_font = ImageFont.truetype(font_paths[0], 18)
-except:
-    try:
-        small_font = ImageFont.truetype(font_paths[1], 18)
-    except:
-        small_font = ImageFont.truetype(font_paths[2], 18)
+title_font = load_font(120)
+sub_font = load_font(32)
+small_font = load_font(18)
 
 # Title text
 title_text = "MAKI"

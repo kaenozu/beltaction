@@ -57,6 +57,9 @@ export class Game {
     this.screenShakeTimer = 0;
     this.screenShakeDuration = 0;
     this.screenShakeMagnitude = 0;
+    for (const entity of this.entities) {
+      entity.restart?.();
+    }
   }
 
   requestHitStop(duration: number): void {
@@ -76,7 +79,7 @@ export class Game {
   }
 
   private loop(currentTime: number): void {
-    const dt = (currentTime - this.lastTime) / 1000;
+    const dt = Math.min((currentTime - this.lastTime) / 1000, 0.1);
     this.lastTime = currentTime;
 
     this.onFrame?.();

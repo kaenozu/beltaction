@@ -22,4 +22,5 @@ export class Entity {
   update(_dt: number): void {}
   render(_ctx: CanvasRenderingContext2D): void {}
   renderOverlay(_ctx: CanvasRenderingContext2D): void {}
+  restart?(..._args: unknown[]): void {}
 }

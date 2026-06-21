@@ -182,7 +182,7 @@ export class ChainEnemy extends Entity {
   }
 
   takeDamage(amount: number, fromX?: number): boolean {
-    this.health -= amount;
+    this.health = Math.max(0, this.health - amount);
     const knockDir = fromX !== undefined ? (fromX > this.x ? 1 : -1) : this.facing;
     if (this.health <= 0) {
       this.state = 'death';
