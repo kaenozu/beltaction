@@ -12,6 +12,7 @@ import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { HitEffect } from '../effects/HitEffect';
 import { DebugFlags } from './DebugFlags';
+import { playHitHeavy, playKick } from './SoundManager';
 import { rectsOverlap } from './HitboxConfig';
 
 type EnemyActor = Enemy | ChainEnemy;
@@ -146,6 +147,7 @@ export class SpawnSystem extends Entity {
       const hurt = enemy.getHurtHitbox();
 
       if (rectsOverlap(atk, hurt)) {
+        if (isKick) playKick(); else playHitHeavy();
         const left = Math.max(atk.x, hurt.x);
         const right = Math.min(atk.x + atk.w, hurt.x + hurt.w);
         const top = Math.max(atk.y, hurt.y);
