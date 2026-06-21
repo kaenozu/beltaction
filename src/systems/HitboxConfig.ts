@@ -8,6 +8,7 @@
 
 import makiData from '../../tools/hitbox-presets/maki_attack.json';
 import gruntData from '../../tools/hitbox-presets/grunt_attack.json';
+import chainData from '../../tools/hitbox-presets/chain_attack.json';
 
 export interface HitboxRect {
   x: number;
@@ -52,6 +53,7 @@ export function resolveFacingHitbox(
 // JSONファイルが真実のソース
 export const MAKI_HITBOX: HitboxConfig = makiData as HitboxConfig;
 export const GRUNT_HITBOX: HitboxConfig = gruntData as HitboxConfig;
+export const CHAIN_HITBOX: HitboxConfig = chainData as HitboxConfig;
 
 export function rectsOverlap(a: HitboxRect, b: HitboxRect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;

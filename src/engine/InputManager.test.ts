@@ -16,7 +16,7 @@ describe('InputManager', () => {
     const state = input.getState('nonexistent');
     expect(state).toEqual({
       up: false, down: false, left: false, right: false,
-      attack: false, kick: false,
+      attack: false, kick: false, jump: false,
     });
   });
 
@@ -24,7 +24,7 @@ describe('InputManager', () => {
     const state = input.getState('player1');
     expect(state).toEqual({
       up: false, down: false, left: false, right: false,
-      attack: false, kick: false,
+      attack: false, kick: false, jump: false,
     });
   });
 
@@ -62,10 +62,10 @@ describe('InputManager', () => {
 
   it('handles space (jump) key for player1', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
-    expect(input.getState('player1').up).toBe(true);
+    expect(input.getState('player1').jump).toBe(true);
 
     window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }));
-    expect(input.getState('player1').up).toBe(false);
+    expect(input.getState('player1').jump).toBe(false);
   });
 
   it('handles player2 arrow keys', () => {

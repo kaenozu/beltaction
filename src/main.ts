@@ -29,6 +29,8 @@ import gruntHurtUrl from '/assets/grunt_hurt_generated_despill.png';
 import gruntHeavyUrl from '/assets/grunt_heavy_generated_despill.png';
 import gruntBodyBlowUrl from '/assets/grunt_bodyblow_generated_despill.png';
 import chainEnemyUrl from '/assets/chain_enemy_spritesheet_chainclear.png';
+import chainHurtUrl from '/assets/chain_hurt_generated.png';
+import chainDeathUrl from '/assets/chain_death_generated.png';
 import chainProjectileUrl from '/assets/chain_projectile_generated.png';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -38,6 +40,7 @@ const input = new InputManager();
 const stage = new StageManager();
 
 const player = new Player(100, 300);
+player.requestHitStop = (duration) => game.requestHitStop(duration);
 const spawner = new SpawnSystem(
   () => player,
   (duration = 0.06, shakeDuration = 0, shakeMagnitude = 0) => {
@@ -67,6 +70,8 @@ loadImages({
   gruntHeavy: gruntHeavyUrl,
   gruntBodyBlow: gruntBodyBlowUrl,
   chainEnemy: chainEnemyUrl,
+  chainHurt: chainHurtUrl,
+  chainDeath: chainDeathUrl,
   chainProjectile: chainProjectileUrl,
 }).then((imgs) => {
   player.idleImage = imgs.idle;
@@ -86,6 +91,8 @@ loadImages({
   spawner.heavyAttackImage = imgs.gruntHeavy;
   spawner.bodyBlowImage = imgs.gruntBodyBlow;
   spawner.chainSpriteImage = imgs.chainEnemy;
+  spawner.chainHurtImage = imgs.chainHurt;
+  spawner.chainDeathImage = imgs.chainDeath;
   spawner.chainProjectileImage = imgs.chainProjectile;
 });
 

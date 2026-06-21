@@ -5,11 +5,11 @@
  * 関連: Game.ts（setBackground）, main.ts（スクロール連動）
  */
 
+import { CANVAS_WIDTH, STAGE_WIDTH } from '../engine/Constants';
 import { Entity } from '../engine/Entity';
 
 export class StageManager extends Entity {
   private scrollX: number = 0;
-  private readonly STAGE_WIDTH = 2000;
   
   constructor() {
     super(0, 0);
@@ -22,8 +22,8 @@ export class StageManager extends Entity {
   }
   
   setPosition(centerX: number): void {
-    const targetScroll = centerX - 320;
-    this.scrollX = Math.max(0, Math.min(targetScroll, this.STAGE_WIDTH - 640));
+    const targetScroll = centerX - CANVAS_WIDTH / 2;
+    this.scrollX = Math.max(0, Math.min(targetScroll, STAGE_WIDTH - CANVAS_WIDTH));
   }
   
   getScrollX(): number {
@@ -37,8 +37,8 @@ export class StageManager extends Entity {
     
     // Far background (sky + distant buildings with sx parallax)
     ctx.fillStyle = '#1a3a5a';
-    ctx.fillRect(0, 0, 640, 200);
-    const wrapX = (x: number) => ((x % 640) + 640) % 640;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, 200);
+    const wrapX = (x: number) => ((x % CANVAS_WIDTH) + CANVAS_WIDTH) % CANVAS_WIDTH;
     for (let i = 0; i < 6; i++) {
       ctx.fillRect(wrapX(i * 300 - sx), 100, 40, 100);
     }

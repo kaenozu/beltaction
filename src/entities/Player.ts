@@ -5,6 +5,7 @@
  * 関連: Entity.ts, InputManager.ts（入力）, Enemy.ts（衝突）
  */
 
+import { CANVAS_HEIGHT, STAGE_WIDTH } from '../engine/Constants';
 import { Entity } from '../engine/Entity';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
@@ -17,6 +18,7 @@ import {
   LOW_HEALTH_HURT_STUN_BONUS,
   HURT_KNOCKBACK_BY_REACTION,
   HURT_DRAW_SCALE_BY_REACTION,
+  HURT_HITSTOP_BY_REACTION,
   DOWN_HIT_PRESENTATION,
 } from './PlayerTypes';
 import { PlayerRenderer } from './PlayerRenderer';
@@ -37,6 +39,7 @@ export class Player extends Entity {
     this.zIndex = (s === 'down' || s === 'downhit' || s === 'getup') ? -1 : 0;
   }
   onDeath: (() => void) | null = null;
+  requestHitStop: ((duration: number) => void) | null = null;
   private stateTimer: number = 0;
   private recoveryTimer: number = 0;
   private postGameGroundHitCount: number = 0;
@@ -54,9 +57,22 @@ export class Player extends Entity {
   private grabImpactDirection: number = 0;
   private boundAnchorX: number = 0;
   private boundPullSpeed: number = 0;
+  private boundEscapeProgress: number = 0;
+  private prevBoundResist: boolean = false;
   private chainWrapped: boolean = false;
   private chainWrappedDuration: number = 0;
   private chainWrappedImpactTimer: number = 0;
+  private boundBodyBlowHurtTimer: number = 0;
+  private chainBodyBlowCount: number = 0;
+  private boundGrabDirection: number = 1;
+  private boundPullPhase: 'pull' | 'resist' = 'pull';
+  private boundPullPhaseTimer: number = 0;
+  public boundReadyForFollowup: boolean = false;
+  private readonly BOUND_PULL_DURATION = 0.3;
+  private readonly BOUND_RESIST_DURATION = 0.15;
+  private readonly BOUND_RESIST_SHAKE_AMPLITUDE = 0.8;
+  private readonly BOUND_RESIST_SHAKE_FREQUENCY = 30;
+  private readonly CHAIN_BODY_BLOW_RELEASE_COUNT = 5;
   private readonly POST_GAME_DEATH_REPLAY_HITS = 3;
   private readonly DOWN_GRACE_DURATION = 1.0;
   private readonly DOWN_RECOVERY_DURATION = 0.95;
@@ -68,6 +84,9 @@ export class Player extends Entity {
   private readonly LOW_HEALTH_MOVE_SPEED_MULTIPLIER = 0.88;
   private readonly GRAB_FOLLOWUP_IMPACT_DURATION = 0.18;
   private readonly GRAB_FOLLOWUP_IMPACT_DISTANCE = 10;
+  private readonly BOUND_BODY_BLOW_HURT_DURATION = 0.22;
+  private readonly BOUND_ESCAPE_REQUIRED = 26;
+  private readonly BOUND_ESCAPE_DECAY_PER_SECOND = 8;
   private readonly GRAVITY = 1200;
   private readonly MOVE_SPEED = 220;
   private readonly JUMP_FORCE = -500;
@@ -75,6 +94,7 @@ export class Player extends Entity {
   /** 統一ダメージ処理: noPlayerHpDamageではHPだけ保護し、被弾リアクションは残す */
   takeDamage(amount: number, fromX: number, reaction: HitReactionType = 'light'): boolean {
     if (this.isDefeated || this.isWakeupInvincible) return false;
+    if (this.state === 'bound') return this.takeBoundDamage(amount, fromX);
     if (!DebugFlags.noPlayerHpDamage) {
       this.health = Math.max(0, this.health - amount);
       if (this.health <= 0) {
@@ -138,13 +158,27 @@ export class Player extends Entity {
   get chainWrappedImpactRatio(): number {
     return Math.max(0, Math.min(1, this.chainWrappedImpactTimer / this.GRAB_FOLLOWUP_IMPACT_DURATION));
   }
-  get isDoubleGrabbed(): boolean { return (this.state === 'grabbed' || this.isChainWrapped) && this.followupGrabberX !== null; }
-  get canBeGrabbed(): boolean { return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isBound && !this.isWakeupInvincible; }
-  get canBeBound(): boolean { return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isBound && !this.isWakeupInvincible; }
+  get isBoundBodyBlowHurt(): boolean { return this.boundBodyBlowHurtTimer > 0; }
+  get boundBodyBlowHurtRatio(): number {
+    return Math.max(0, Math.min(1, this.boundBodyBlowHurtTimer / this.BOUND_BODY_BLOW_HURT_DURATION));
+  }
+  get isDoubleGrabbed(): boolean { return (this.state === 'grabbed' || this.isBound) && this.followupGrabberX !== null; }
+  get boundEscapeRatio(): number { return Math.max(0, Math.min(1, this.boundEscapeProgress / this.BOUND_ESCAPE_REQUIRED)); }
+  private get canBeInteractedWith(): boolean {
+    return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isBound && !this.isWakeupInvincible;
+  }
+  get canBeGrabbed(): boolean { return this.canBeInteractedWith; }
+  get canBeBound(): boolean { return this.canBeInteractedWith; }
   get facingDirection(): number { return this.facing; }
   get grabberDirection(): number { return this.grabberX >= this.x ? 1 : -1; }
-  get grabFollowupX(): number { return this.x - this.grabberDirection * 68; }
-  get grabFollowupHitX(): number { return this.x + this.width / 2 - this.grabberDirection * 8; }
+  get grabFollowupDirection(): number {
+    if (this.state === 'bound') return -this.boundGrabDirection;
+    return -this.grabberDirection;
+  }
+  get grabFollowupX(): number {
+    return this.x + this.grabFollowupDirection * 68;
+  }
+  get grabFollowupHitX(): number { return this.x + this.width / 2 + this.grabFollowupDirection * 8; }
   get grabFollowupHitY(): number { return this.y + this.height * 0.54; }
   get canBeKnockedDownByFollowup(): boolean {
     return this.state === 'hurt' && this.currentHitReaction === 'guardHead';
@@ -188,6 +222,11 @@ export class Player extends Entity {
     this.chainWrapped = false;
     this.chainWrappedDuration = 0;
     this.chainWrappedImpactTimer = 0;
+    this.boundBodyBlowHurtTimer = 0;
+    this.boundEscapeProgress = 0;
+    this.chainBodyBlowCount = 0;
+    this.boundGrabDirection = 1;
+    this.prevBoundResist = false;
     this.active = true;
   }
   
@@ -203,6 +242,8 @@ export class Player extends Entity {
     this.updateWakeupInvincibility(dt);
     this.updateGrabImpact(dt);
     this.updateChainWrappedImpact(dt);
+    this.updateBoundBodyBlowHurt(dt);
+    this.updateBoundResistance(dt);
     this.applyPhysics(dt);
     this.updateAnimation(dt);
   }
@@ -218,6 +259,42 @@ export class Player extends Entity {
   private updateChainWrappedImpact(dt: number): void {
     if (this.chainWrappedImpactTimer <= 0) return;
     this.chainWrappedImpactTimer = Math.max(0, this.chainWrappedImpactTimer - dt);
+  }
+
+  private updateBoundBodyBlowHurt(dt: number): void {
+    if (this.boundBodyBlowHurtTimer <= 0) return;
+    this.boundBodyBlowHurtTimer = Math.max(0, this.boundBodyBlowHurtTimer - dt);
+    if (this.boundBodyBlowHurtTimer <= 0) {
+      this.currentFrame = HURT_FRAME_BY_REACTION.guardHead % this.HURT_FRAME_COUNT;
+      this.hurtDrawScale = 1;
+    }
+  }
+
+  private updateBoundResistance(dt: number): void {
+    if (this.state !== 'bound' && this.state !== 'grabbed') {
+      this.prevBoundResist = false;
+      this.boundEscapeProgress = 0;
+      return;
+    }
+    if (this.health <= 0) return;
+
+    const resisting = this.inputState.left || this.inputState.right || this.inputState.attack || this.inputState.kick;
+    if (resisting && !this.prevBoundResist) {
+      this.boundEscapeProgress += 2.6;
+    } else if (resisting) {
+      this.boundEscapeProgress += 20 * dt;
+    } else {
+      this.boundEscapeProgress = Math.max(0, this.boundEscapeProgress - this.BOUND_ESCAPE_DECAY_PER_SECOND * dt);
+    }
+    this.prevBoundResist = resisting;
+
+    if (this.boundEscapeProgress >= this.BOUND_ESCAPE_REQUIRED) {
+      if (this.state === 'grabbed') {
+        this.releaseGrab();
+      } else {
+        this.releaseBound();
+      }
+    }
   }
 
   private getGrabImpactOffset(): number {
@@ -267,8 +344,8 @@ export class Player extends Entity {
       if (this.onGround) this.setState('idle');
     }
     
-    // Jump
-    if (this.inputState.up && this.onGround) {
+    // Jump (uses jump key, with up as fallback)
+    if ((this.inputState.jump || this.inputState.up) && this.onGround) {
       this.velocityY = this.JUMP_FORCE;
       this.onGround = false;
       this.setState('jump');
@@ -307,7 +384,7 @@ export class Player extends Entity {
     if (this.stateTimer > 0) {
       this.stateTimer -= dt;
       if (this.stateTimer <= 0) {
-        if (this.state === 'attack') {
+        if (this.state === 'attack' || this.state === 'kick') {
           this.rapidCount = Math.max(0, this.rapidCount - 1);
           this.currentAttackKind = null;
         } else if (this.state === 'death') {
@@ -482,6 +559,25 @@ export class Player extends Entity {
     } else {
       this.velocityX = 0;
     }
+    this.requestHitStop?.(HURT_HITSTOP_BY_REACTION[reaction]);
+  }
+
+  public startPostGameGrabbed(grabberX: number): void {
+    if (!this.canReceivePostGameHit) return;
+    this.grabberX = grabberX;
+    this.grabOffsetX = grabberX > this.x ? -42 : 42;
+    this.facing = grabberX > this.x ? 1 : -1;
+    this.setState('grabbed');
+    this.stateTimer = 0;
+    this.recoveryTimer = 0;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.animTimer = 0;
+    this.currentFrame = HURT_FRAME_BY_REACTION.guardHead;
+    this.hurtDrawScale = 1;
+    this.followupGrabberX = null;
+    this.grabImpactTimer = 0;
+    this.grabImpactDirection = 0;
   }
 
   public startGrabbed(grabberX: number): void {
@@ -500,11 +596,13 @@ export class Player extends Entity {
     this.followupGrabberX = null;
     this.grabImpactTimer = 0;
     this.grabImpactDirection = 0;
+    this.boundEscapeProgress = 0;
+    this.prevBoundResist = false;
   }
 
-  public startBound(attackerX: number, duration: number, pullSpeed: number, damage: number): boolean {
-    if (!this.canBeBound) return false;
-    if (!DebugFlags.noPlayerHpDamage && damage > 0) {
+  public startBound(attackerX: number, duration: number, pullSpeed: number, damage: number, force: boolean = false): boolean {
+    if (!force && !this.canBeBound) return false;
+    if (!DebugFlags.noPlayerHpDamage && damage > 0 && this.health > 0) {
       this.health = Math.max(0, this.health - damage);
       if (this.health <= 0) {
         this.die(attackerX);
@@ -514,10 +612,17 @@ export class Player extends Entity {
     this.boundAnchorX = attackerX;
     this.grabberX = attackerX;
     this.boundPullSpeed = pullSpeed;
+    this.boundEscapeProgress = 0;
+    this.prevBoundResist = false;
     this.chainWrapped = false;
     this.chainWrappedDuration = 0;
     this.chainWrappedImpactTimer = 0;
+    this.boundBodyBlowHurtTimer = 0;
     this.facing = attackerX > this.x ? 1 : -1;
+    this.boundGrabDirection = this.facing;
+    this.boundPullPhase = 'pull';
+    this.boundPullPhaseTimer = 0;
+    this.boundReadyForFollowup = false;
     this.setState('bound');
     this.stateTimer = duration;
     this.recoveryTimer = 0;
@@ -533,6 +638,7 @@ export class Player extends Entity {
     if (this.state !== 'bound') return;
     this.chainWrapped = true;
     this.chainWrappedDuration = duration;
+    this.boundReadyForFollowup = true;
     this.stateTimer = duration;
     this.boundPullSpeed = 0;
     this.velocityX = 0;
@@ -540,33 +646,54 @@ export class Player extends Entity {
   }
 
   public receiveBoundBodyBlow(fromX: number, damage: number): boolean {
-    if (!this.isChainWrapped || this.state !== 'bound' || this.isDefeated) return false;
-    if (!DebugFlags.noPlayerHpDamage) {
+    if (this.state !== 'bound') return false;
+    if (this.isDefeated && !DebugFlags.allowPostGameOverAttacks) return false;
+    if (this.health > 0 && !DebugFlags.noPlayerHpDamage) {
       this.health = Math.max(0, this.health - damage);
       if (this.health <= 0) {
         this.die(fromX);
         return true;
       }
     }
-    this.facing = fromX > this.x ? 1 : -1;
-    this.currentFrame = HURT_FRAME_BY_REACTION.bodyBlow % this.HURT_FRAME_COUNT;
-    this.hurtDrawScale = HURT_DRAW_SCALE_BY_REACTION.bodyBlow;
-    this.chainWrappedImpactTimer = this.GRAB_FOLLOWUP_IMPACT_DURATION;
+    this.boundBodyBlowHurtTimer = this.BOUND_BODY_BLOW_HURT_DURATION;
     this.velocityX = 0;
-    this.velocityY = 0;
+    this.velocityY = -80;
+    return true;
+  }
+
+  private takeBoundDamage(amount: number, fromX: number): boolean {
+    if (this.health <= 0) return true;
+    if (!DebugFlags.noPlayerHpDamage) {
+      this.health = Math.max(0, this.health - amount);
+      if (this.health <= 0) {
+        this.die(fromX);
+        return true;
+      }
+    }
+    this.velocityX = 0;
+    this.velocityY = -80;
     return true;
   }
 
   public pullBoundToward(anchorX: number, dt: number): void {
     if (this.state !== 'bound') return;
     this.boundAnchorX = anchorX;
+    this.boundPullPhaseTimer += dt;
+    const phaseDuration = this.boundPullPhase === 'pull' ? this.BOUND_PULL_DURATION : this.BOUND_RESIST_DURATION;
+    if (this.boundPullPhaseTimer >= phaseDuration) {
+      this.boundPullPhase = this.boundPullPhase === 'pull' ? 'resist' : 'pull';
+      this.boundPullPhaseTimer = 0;
+    }
     const center = this.x + this.width / 2;
     const distance = this.boundAnchorX - center;
-    const maxStep = this.boundPullSpeed * dt;
-    const step = Math.max(-maxStep, Math.min(maxStep, distance));
-    this.x += step;
+    if (this.boundPullPhase === 'pull') {
+      const maxStep = this.boundPullSpeed * dt;
+      const step = Math.max(-maxStep, Math.min(maxStep, distance));
+      this.x += step;
+    } else {
+      this.x += Math.sin(this.boundPullPhaseTimer * this.BOUND_RESIST_SHAKE_FREQUENCY * Math.PI * 2) * this.BOUND_RESIST_SHAKE_AMPLITUDE;
+    }
     this.velocityX = 0;
-    this.velocityY = 0;
   }
 
   public updateGrabbedPosition(grabberX: number): void {
@@ -584,13 +711,14 @@ export class Player extends Entity {
   }
 
   public startGrabFollowup(grabberX: number): boolean {
-    if ((this.state !== 'grabbed' && !this.isChainWrapped) || this.followupGrabberX !== null || this.health <= 0) return false;
+    if ((this.state !== 'grabbed' && !this.isBound) || this.followupGrabberX !== null) return false;
+    if (this.health <= 0 && !DebugFlags.allowPostGameOverAttacks) return false;
     this.followupGrabberX = grabberX;
     return true;
   }
 
   public updateGrabFollowupPosition(grabberX: number): void {
-    if ((this.state !== 'grabbed' && !this.isChainWrapped) || this.followupGrabberX === null) return;
+    if ((this.state !== 'grabbed' && !this.isBound) || this.followupGrabberX === null) return;
     this.followupGrabberX = grabberX;
   }
 
@@ -599,11 +727,35 @@ export class Player extends Entity {
   }
 
   public receiveGrabFollowupHit(fromX: number, damage: number): void {
-    if (!this.isDoubleGrabbed || this.health <= 0) return;
+    if (!this.isDoubleGrabbed) return;
+    if (this.health <= 0 && !DebugFlags.allowPostGameOverAttacks) return;
+
+    if (this.state === 'bound') {
+      this.velocityX = 0;
+      this.velocityY = -80;
+      this.startBoundBodyBlowHurt();
+      if (this.health > 0) {
+        this.chainBodyBlowCount++;
+        if (this.chainBodyBlowCount >= this.CHAIN_BODY_BLOW_RELEASE_COUNT) {
+          this.finishGrabFollowup();
+          this.releaseBound();
+          this.tripDown(fromX, damage);
+          return;
+        }
+        if (!DebugFlags.noPlayerHpDamage) {
+          this.health = Math.max(0, this.health - damage);
+          if (this.health <= 0) {
+            this.die(fromX);
+            return;
+          }
+        }
+      }
+      return;
+    }
+
     this.grabImpactDirection = fromX > this.x ? -1 : 1;
     this.grabImpactTimer = this.GRAB_FOLLOWUP_IMPACT_DURATION;
-    if (this.isChainWrapped) this.chainWrappedImpactTimer = this.GRAB_FOLLOWUP_IMPACT_DURATION;
-    if (!DebugFlags.noPlayerHpDamage) {
+    if (this.health > 0 && !DebugFlags.noPlayerHpDamage) {
       this.health = Math.max(0, this.health - damage);
       if (this.health <= 0) {
         this.die(fromX);
@@ -614,6 +766,8 @@ export class Player extends Entity {
 
   public finishGrab(fromX: number): void {
     if (this.state !== 'grabbed') return;
+    this.boundEscapeProgress = 0;
+    this.prevBoundResist = false;
     this.followupGrabberX = null;
     this.currentDownHitReaction = 'back';
     const presentation = DOWN_HIT_PRESENTATION.back;
@@ -630,6 +784,8 @@ export class Player extends Entity {
   public releaseGrab(): void {
     if (this.state !== 'grabbed') return;
     this.followupGrabberX = null;
+    this.boundEscapeProgress = 0;
+    this.prevBoundResist = false;
     this.velocityX = 0;
     this.velocityY = 0;
     this.setState('idle');
@@ -642,9 +798,22 @@ export class Player extends Entity {
     this.chainWrapped = false;
     this.chainWrappedDuration = 0;
     this.chainWrappedImpactTimer = 0;
+    this.boundBodyBlowHurtTimer = 0;
+    this.boundEscapeProgress = 0;
+    this.prevBoundResist = false;
+    this.chainBodyBlowCount = 0;
+    this.boundGrabDirection = 1;
+    this.boundPullPhase = 'pull';
+    this.boundPullPhaseTimer = 0;
+    this.boundReadyForFollowup = false;
     this.velocityX = 0;
     this.velocityY = 0;
     this.setState('idle');
+  }
+
+  private startBoundBodyBlowHurt(): void {
+    this.chainWrappedImpactTimer = this.GRAB_FOLLOWUP_IMPACT_DURATION;
+    this.boundBodyBlowHurtTimer = this.BOUND_BODY_BLOW_HURT_DURATION;
   }
 
   private enterDownedRecovery(): void {
@@ -702,14 +871,14 @@ export class Player extends Entity {
     this.y += this.velocityY * dt;
     
     // Ground collision
-    if (this.y > 480 - this.height) {
-      this.y = 480 - this.height;
+    if (this.y > CANVAS_HEIGHT - this.height) {
+      this.y = CANVAS_HEIGHT - this.height;
       this.velocityY = 0;
       this.onGround = true;
     }
 
     // Stage boundary
-    this.x = Math.max(0, Math.min(this.x, 2000 - this.width));
+    this.x = Math.max(0, Math.min(this.x, STAGE_WIDTH - this.width));
   }
   
   override render(ctx: CanvasRenderingContext2D): void {

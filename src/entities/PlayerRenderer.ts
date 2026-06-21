@@ -7,7 +7,7 @@
 
 import { DebugFlags } from '../systems/DebugFlags';
 import type { Player } from './Player';
-import { DOWN_HIT_PRESENTATION } from './PlayerTypes';
+import { DOWN_HIT_PRESENTATION, HURT_FRAME_BY_REACTION } from './PlayerTypes';
 
 export class PlayerRenderer {
   constructor(private player: Player) {}
@@ -18,12 +18,13 @@ export class PlayerRenderer {
     ctx.translate(this.player.x + this.player.width / 2, 0);
     ctx.scale(this.player.facing, 1);
     this.renderSprite(ctx);
-    if (this.player.isChainWrapped) this.drawChainWrap(ctx);
+    if (this.player.isChainWrapped && this.player.isBoundBodyBlowHurt) this.drawChainWrap(ctx);
     ctx.restore();
     ctx.fillStyle = '#fff';
     ctx.font = '12px monospace';
     ctx.fillText(`${this.player.state.toUpperCase()} [${this.player.currentFrame}] r=${this.player.rapidCount}`, this.player.x, this.player.y - 5);
     this.renderDebugHitboxes(ctx);
+    if ((this.player.state === 'bound' || this.player.state === 'grabbed') && this.player.health > 0) this.drawBoundResistanceGauge(ctx);
   }
 
   private renderSprite(ctx: CanvasRenderingContext2D): void {
@@ -70,12 +71,15 @@ export class PlayerRenderer {
     ctx.drawImage(this.player.hurtImage!, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width * s / 2, this.player.y - this.player.height * (s - 1), this.player.width * s, this.player.height * s);
   }
 
+
   private renderGrabbedSprite(ctx: CanvasRenderingContext2D): void {
+    const hop = this.player.state === 'bound' ? this.player.boundBodyBlowHurtRatio * 4 : 0;
+    const y = this.player.y - hop;
     if (this.player.grabbedImage) {
-      ctx.drawImage(this.player.grabbedImage, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
+      ctx.drawImage(this.player.grabbedImage, -this.player.width / 2, y, this.player.width, this.player.height);
     } else if (this.player.hurtImage) {
-      const sx = 1 * this.player.frameWidth;
-      ctx.drawImage(this.player.hurtImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
+      const sx = HURT_FRAME_BY_REACTION.guardHead * this.player.frameWidth;
+      ctx.drawImage(this.player.hurtImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, y, this.player.width, this.player.height);
     }
   }
 
@@ -203,5 +207,17 @@ export class PlayerRenderer {
     ctx.ellipse(this.player.x + this.player.width / 2, groundY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+  }
+
+  private drawBoundResistanceGauge(ctx: CanvasRenderingContext2D): void {
+    const ratio = this.player.boundEscapeRatio;
+    const cx = this.player.x + this.player.width / 2;
+    const gy = this.player.y + this.player.height - 3;
+    const w = 40;
+    const h = 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(cx - w / 2 - 1, gy - h / 2 - 1, w + 2, h + 2);
+    ctx.fillStyle = ratio >= 1 ? '#ffd700' : '#fff';
+    ctx.fillRect(cx - w / 2, gy - h / 2, w * ratio, h);
   }
 }

@@ -8,7 +8,7 @@
 import { Entity } from '../engine/Entity';
 import { Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
-import { GRUNT_HITBOX, HitboxConfig, HitboxRect, rectsOverlap, resolveFacingHitbox } from '../systems/HitboxConfig';
+import { CHAIN_HITBOX, HitboxConfig, HitboxRect, rectsOverlap, resolveFacingHitbox } from '../systems/HitboxConfig';
 import { ChainEnemyRenderer } from './ChainEnemyRenderer';
 
 type ChainEnemyState = 'idle' | 'walk' | 'chainShot' | 'boundPull' | 'chainBind' | 'lowSweep' | 'downDrag' | 'hurt' | 'death';
@@ -17,6 +17,7 @@ export class ChainEnemy extends Entity {
   public health: number = 38;
   public spriteImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
+  public deathImage: HTMLImageElement | null = null;
   public heavyAttackImage: HTMLImageElement | null = null;
   public bodyBlowImage: HTMLImageElement | null = null;
   public chainImage: HTMLImageElement | null = null;
@@ -27,6 +28,7 @@ export class ChainEnemy extends Entity {
 
   public state: ChainEnemyState = 'walk';
   private stateTimer: number = 0;
+  private deathAnimTimer: number = 0;
   private velocityX: number = 0;
   private attackCooldown: number = 1.0;
   private chainCooldown: number = 1.4;
@@ -40,6 +42,8 @@ export class ChainEnemy extends Entity {
   public chainTargetY: number = 0;
   public readonly frameWidth = 160;
   public readonly spriteFrameWidth = 220;
+  public readonly hurtFrameWidth = 220;
+  public readonly deathFrameWidth = 160;
   public readonly frameHeight = 192;
   private readonly MOVE_SPEED = 72;
   private readonly STOP_RANGE = 150;
@@ -49,17 +53,17 @@ export class ChainEnemy extends Entity {
   private readonly DOWN_DRAG_RANGE = 142;
   private readonly ATTACK_COOLDOWN = 1.35;
   private readonly CHAIN_COOLDOWN = 3.1;
-  private readonly CHAIN_BIND_DURATION = 0.82;
-  private readonly CHAIN_WRAP_DURATION = 3.0;
-  private readonly CHAIN_WRAP_RANGE = 92;
-  private readonly CHAIN_PULL_SPEED = 165;
+  private readonly CHAIN_PULL_DURATION = 6.0;
+  private readonly CHAIN_WRAP_DURATION = 3.6;
+  private readonly CHAIN_GRAPPLE_RANGE = 34;
+  private readonly CHAIN_PULL_SPEED = 72;
   private readonly CHAIN_DAMAGE = 3;
   private readonly CHAIN_HITBOX_THICKNESS = 18;
   private readonly SWEEP_DAMAGE = 8;
   private readonly DOWN_DRAG_DAMAGE = 6;
   private readonly ANIM_SPEED = 0.24;
   private readonly SWEEP_HITBOX: HitboxRect = { x: 72, y: 120, w: 82, h: 36 };
-  private hitboxConfig: HitboxConfig = GRUNT_HITBOX;
+  private hitboxConfig: HitboxConfig = CHAIN_HITBOX;
 
   get isDead(): boolean { return this.state === 'death'; }
   get isBodyBlowGrappler(): boolean { return false; }
@@ -85,18 +89,27 @@ export class ChainEnemy extends Entity {
     this.updateStateTimer(dt);
 
     if (this.state === 'hurt' || this.state === 'death') {
+      if (this.state === 'death') this.deathAnimTimer += dt;
       this.applyPhysics(dt);
       this.updateAnimation(dt);
       return;
     }
 
     if (this.state === 'boundPull') {
+      if (!player.isBound) {
+        this.cancelChainGrapple();
+        this.applyPhysics(dt);
+        this.updateAnimation(dt);
+        return;
+      }
       this.velocityX = 0;
       player.pullBoundToward(this.x + this.width / 2, dt);
       this.chainTargetX = player.x + player.width / 2;
       this.chainTargetY = player.y + player.height * 0.5;
-      if (this.getBoundDistanceToPlayer(player) <= this.CHAIN_WRAP_RANGE) {
+      if (this.getBoundDistanceToPlayer(player) <= this.CHAIN_GRAPPLE_RANGE) {
         this.startChainBind(player);
+      } else {
+        this.stateTimer = Math.max(0, this.stateTimer - dt);
       }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
@@ -104,6 +117,20 @@ export class ChainEnemy extends Entity {
     }
 
     if (this.state === 'chainBind') {
+      if (!player.isBound) {
+        this.cancelChainGrapple();
+        this.applyPhysics(dt);
+        this.updateAnimation(dt);
+        return;
+      }
+      this.stateTimer = Math.max(0, this.stateTimer - dt);
+      if (this.stateTimer <= 0) {
+        player.releaseBound();
+        this.cancelChainGrapple();
+        this.applyPhysics(dt);
+        this.updateAnimation(dt);
+        return;
+      }
       this.velocityX = 0;
       this.chainTargetX = player.x + player.width / 2;
       this.chainTargetY = player.y + player.height * 0.5;
@@ -127,9 +154,11 @@ export class ChainEnemy extends Entity {
       return;
     }
 
-    if (player.canReceiveGroundHit && dist < this.DOWN_DRAG_RANGE && this.attackCooldown <= 0) {
+    const canPostGame = DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit;
+
+    if ((player.canReceiveGroundHit || canPostGame) && dist < this.DOWN_DRAG_RANGE && this.attackCooldown <= 0) {
       this.startAttack('downDrag', 0.52, this.ATTACK_COOLDOWN);
-    } else if (player.canBeBound && dist >= this.CHAIN_MIN_RANGE && dist <= this.CHAIN_MAX_RANGE && this.chainCooldown <= 0) {
+    } else if ((player.canBeBound || canPostGame) && dist >= this.CHAIN_MIN_RANGE && dist <= this.CHAIN_MAX_RANGE && this.chainCooldown <= 0) {
       this.startAttack('chainShot', 0.62, this.CHAIN_COOLDOWN);
     } else if (!player.isDowned && !player.isGrabbed && !player.isBound && dist < this.SWEEP_RANGE && this.attackCooldown <= 0) {
       this.startAttack('lowSweep', 0.48, this.ATTACK_COOLDOWN);
@@ -152,20 +181,22 @@ export class ChainEnemy extends Entity {
     this.targetX = targetX;
   }
 
-  takeDamage(amount: number, fromX?: number): void {
+  takeDamage(amount: number, fromX?: number): boolean {
     this.health -= amount;
     const knockDir = fromX !== undefined ? (fromX > this.x ? 1 : -1) : this.facing;
     if (this.health <= 0) {
       this.state = 'death';
-      this.stateTimer = 0.5;
+      this.stateTimer = 0.65;
+      this.deathAnimTimer = 0;
       this.velocityX = knockDir * -120;
       this.attackHit = false;
       this.onDeath?.(this.x + this.width / 2, this.y + this.height / 3);
-      return;
+      return true;
     }
     this.state = 'hurt';
     this.stateTimer = 0.22;
     this.velocityX = knockDir * -88;
+    return true;
   }
 
   getAttackHitbox(): HitboxRect | null {
@@ -205,19 +236,10 @@ export class ChainEnemy extends Entity {
 
   private updateStateTimer(dt: number): void {
     if (this.stateTimer <= 0) return;
+    if (this.state === 'boundPull' || this.state === 'chainBind') return;
     this.stateTimer -= dt;
     if (this.stateTimer > 0) return;
 
-    if (this.state === 'boundPull') {
-      this.startChainBind(this.player());
-      return;
-    }
-    if (this.state === 'chainBind') {
-      this.player().releaseBound();
-      this.state = 'idle';
-      this.attackCooldown = this.ATTACK_COOLDOWN;
-      return;
-    }
     if (this.state === 'hurt' || this.state === 'chainShot' || this.state === 'lowSweep' || this.state === 'downDrag') {
       this.state = 'idle';
       this.velocityX = 0;
@@ -236,9 +258,10 @@ export class ChainEnemy extends Entity {
     this.attackHit = true;
 
     if (this.state === 'chainShot') {
-      if (player.startBound(this.x + this.width / 2, this.CHAIN_BIND_DURATION, this.CHAIN_PULL_SPEED, this.CHAIN_DAMAGE)) {
+      const force = DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit;
+      if (player.startBound(this.x + this.width / 2, this.CHAIN_PULL_DURATION, this.CHAIN_PULL_SPEED, this.CHAIN_DAMAGE, force)) {
         this.state = 'boundPull';
-        this.stateTimer = this.CHAIN_BIND_DURATION;
+        this.stateTimer = this.CHAIN_PULL_DURATION;
         this.onHit?.(player.x + player.width / 2, player.y + player.height * 0.5, true);
         this.onHitStop?.(0.05, 0.08, 1.5);
       }
@@ -264,15 +287,28 @@ export class ChainEnemy extends Entity {
   }
 
   private startChainBind(player: Player): void {
+    if (!player.isBound) {
+      this.cancelChainGrapple();
+      return;
+    }
     if (this.state === 'chainBind') return;
     this.state = 'chainBind';
     this.stateTimer = this.CHAIN_WRAP_DURATION;
+    player.boundReadyForFollowup = true;
     this.velocityX = 0;
     this.currentFrame = 1;
     this.animTimer = 0;
     this.chainTargetX = player.x + player.width / 2;
     this.chainTargetY = player.y + player.height * 0.5;
-    player.startChainWrapped(this.CHAIN_WRAP_DURATION);
+  }
+
+  private cancelChainGrapple(): void {
+    this.state = 'idle';
+    this.stateTimer = 0;
+    this.velocityX = 0;
+    this.attackHit = false;
+    this.attackCooldown = this.ATTACK_COOLDOWN;
+    this.chainCooldown = Math.max(this.chainCooldown, this.CHAIN_COOLDOWN * 0.5);
   }
 
   private getBoundDistanceToPlayer(player: Player): number {
@@ -298,8 +334,13 @@ export class ChainEnemy extends Entity {
   }
 
   private updateAnimation(dt: number): void {
-    if (this.state === 'hurt' || this.state === 'death') {
-      this.currentFrame = this.state === 'death' ? 1 : 0;
+    if (this.state === 'hurt') {
+      this.currentFrame = 2;
+      this.animTimer = 0;
+      return;
+    }
+    if (this.state === 'death') {
+      this.currentFrame = 0;
       this.animTimer = 0;
       return;
     }
@@ -324,7 +365,6 @@ export class ChainEnemy extends Entity {
     if (this.state === 'idle') return 0;
     if (this.state === 'walk') return 1 + this.currentFrame;
     if (this.state === 'hurt') return this.currentFrame;
-    if (this.state === 'death') return 4;
     return 3 + this.currentFrame;
   }
 

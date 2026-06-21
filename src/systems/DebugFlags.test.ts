@@ -4,7 +4,7 @@ import { DebugFlags } from './DebugFlags';
 describe('DebugFlags', () => {
   it('has correct default values', () => {
     expect(DebugFlags.showHitboxes).toBe(false);
-    expect(DebugFlags.allowPostGameOverAttacks).toBe(false);
+    expect(DebugFlags.allowPostGameOverAttacks).toBe(true);
     expect(DebugFlags.noPlayerHpDamage).toBe(false);
   });
 

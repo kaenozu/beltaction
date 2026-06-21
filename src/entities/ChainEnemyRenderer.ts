@@ -23,20 +23,54 @@ export class ChainEnemyRenderer {
       return;
     }
 
-    const image = this.enemy.state === 'hurt' && this.enemy.hurtImage ? this.enemy.hurtImage : this.enemy.spriteImage;
-    const frameIdx = this.enemy.getFrameIndex();
-    const sx = frameIdx * this.enemy.spriteFrameWidth;
-
     ctx.save();
     ctx.translate(this.enemy.x + this.enemy.width / 2, 0);
     ctx.scale(-this.enemy.facing, 1);
-    ctx.drawImage(image, sx, 0, this.enemy.spriteFrameWidth, this.enemy.frameHeight, -this.enemy.spriteFrameWidth / 2, this.enemy.y, this.enemy.spriteFrameWidth, this.enemy.height);
+    if (this.renderDeath(ctx)) {
+      ctx.restore();
+      if (this.enemy.useFallbackDetails) this.drawSignatureDetails(ctx);
+      this.drawChain(ctx);
+      this.renderLabels(ctx);
+      this.renderDebugHitboxes(ctx);
+      return;
+    }
+    if (this.renderHurt(ctx)) {
+      ctx.restore();
+      if (this.enemy.useFallbackDetails) this.drawSignatureDetails(ctx);
+      this.drawChain(ctx);
+      this.renderLabels(ctx);
+      this.renderDebugHitboxes(ctx);
+      return;
+    }
+    const frameIdx = this.enemy.getFrameIndex();
+    const sx = frameIdx * this.enemy.spriteFrameWidth;
+    ctx.drawImage(this.enemy.spriteImage, sx, 0, this.enemy.spriteFrameWidth, this.enemy.frameHeight, -this.enemy.spriteFrameWidth / 2, this.enemy.y, this.enemy.spriteFrameWidth, this.enemy.height);
     ctx.restore();
 
     if (this.enemy.useFallbackDetails) this.drawSignatureDetails(ctx);
     this.drawChain(ctx);
     this.renderLabels(ctx);
     this.renderDebugHitboxes(ctx);
+  }
+
+  private renderHurt(ctx: CanvasRenderingContext2D): boolean {
+    if (this.enemy.state !== 'hurt' || !this.enemy.hurtImage) return false;
+    this.drawSinglePose(ctx, this.enemy.hurtImage, this.enemy.height * 0.76, 0);
+    return true;
+  }
+
+  private renderDeath(ctx: CanvasRenderingContext2D): boolean {
+    if (this.enemy.state !== 'death' || !this.enemy.deathImage) return false;
+    this.drawSinglePose(ctx, this.enemy.deathImage, this.enemy.height * 0.76, 0);
+    return true;
+  }
+
+  private drawSinglePose(ctx: CanvasRenderingContext2D, image: HTMLImageElement, drawHeight: number, offsetY: number): void {
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    const drawWidth = drawHeight * (sourceWidth / sourceHeight);
+    ctx.scale(-1, 1);
+    ctx.drawImage(image, 0, 0, sourceWidth, sourceHeight, -drawWidth / 2, this.enemy.y + this.enemy.height - drawHeight + offsetY, drawWidth, drawHeight);
   }
 
   private drawChain(ctx: CanvasRenderingContext2D): void {

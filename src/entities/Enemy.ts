@@ -31,7 +31,7 @@ export class Enemy extends Entity {
   private readonly GRAB_DURATION = 2.8;
   private readonly GRAB_TICK_INTERVAL = 0.38;
   private readonly GRAB_TICK_DAMAGE = 2;
-  private readonly GRAB_FOLLOWUP_DURATION = 1.15;
+  private readonly GRAB_FOLLOWUP_DURATION = 2.4;
   private readonly GRAB_FOLLOWUP_COOLDOWN = 1.35;
   private readonly GRAB_FOLLOWUP_TICK_INTERVAL = 0.42;
   private readonly GRAB_FOLLOWUP_DAMAGE = 5;
@@ -40,6 +40,7 @@ export class Enemy extends Entity {
   private readonly BODY_BLOW_DAMAGE = 9;
   private readonly DOWN_ATTACK_DAMAGE = 7;
   private readonly DOWNED_ATTACK_COOLDOWN = 2.1;
+  private readonly POST_GAME_GRAB_ATTEMPT_CHANCE = 0.15;
   private readonly RETREAT_RANGE = 130;
   private readonly RETREAT_SPEED = 45;
   private readonly TOO_CLOSE_RANGE = 24;
@@ -70,6 +71,7 @@ export class Enemy extends Entity {
   public hurtImage: HTMLImageElement | null = null;
   public heavyAttackImage: HTMLImageElement | null = null;
   public bodyBlowImage: HTMLImageElement | null = null;
+  public mirrorGrabFollowupBodyBlow: boolean = false;
   public onHit: ((x: number, y: number, overlay?: boolean) => void) | null = null;
   public onHitStop: ((duration: number, shakeDuration?: number, shakeMagnitude?: number) => void) | null = null;
   public onDeath: ((x: number, y: number) => void) | null = null;
@@ -118,7 +120,7 @@ export class Enemy extends Entity {
     const dxToTarget = targetX - this.x;
     const dist = Math.abs(dx);
     const targetDist = Math.abs(dxToTarget);
-    const canGrab = player.canBeGrabbed && this.grabCooldown <= 0;
+    const canGrab = (player.canBeGrabbed || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) && this.grabCooldown <= 0;
 
     this.updateFlankTarget(player, dist, canGrab);
 
@@ -172,6 +174,7 @@ export class Enemy extends Entity {
         this.state = 'idle';
         this.velocityX = 0;
         this.attackCooldown = this.GRAB_FOLLOWUP_COOLDOWN;
+        this.mirrorGrabFollowupBodyBlow = false;
         break;
       case 'death':
         this.active = false;
@@ -235,7 +238,7 @@ export class Enemy extends Entity {
   }
 
   private tryBoundBodyBlowBehaviour(player: Player, dt: number): boolean {
-    if (!player.isChainWrapped || this.attackCooldown > 0) return false;
+    if (!player.isBound || !player.boundReadyForFollowup || this.attackCooldown > 0) return false;
 
     const centerDx = this.getCenterDxToPlayer(player);
     const dist = Math.abs(centerDx);
@@ -250,8 +253,13 @@ export class Enemy extends Entity {
         this.grabFollowupTickTimer = 0;
         this.velocityX = 0;
         this.attackHit = false;
+        this.mirrorGrabFollowupBodyBlow = player.grabFollowupDirection > 0;
+        this.currentAttackReaction = 'bodyBlow';
+        this.currentAttackDamage = this.BODY_BLOW_DAMAGE;
+        this.animTimer = 0;
+        this.currentFrame = 0;
       } else {
-        this.velocityX = 0;
+        this.startStandingAttack('bodyBlow');
       }
     } else if (dist < this.BOUND_BODY_BLOW_APPROACH_RANGE) {
       this.state = 'walk';
@@ -284,7 +292,7 @@ export class Enemy extends Entity {
     if (player.canReceiveGroundHit || player.canBeKnockedDownByFollowup || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
       player.downHit(this.x, DebugFlags.allowPostGameOverAttacks, this.currentAttackDamage, this.currentDownHitReaction);
       this.attackCooldown = Math.max(this.attackCooldown, this.DOWNED_ATTACK_COOLDOWN);
-    } else if (player.isChainWrapped && this.currentAttackReaction === 'bodyBlow') {
+    } else if (player.isBound && this.currentAttackReaction === 'bodyBlow') {
       player.receiveBoundBodyBlow(this.x + this.width / 2, this.currentAttackDamage);
     } else {
       player.takeDamage(this.currentAttackDamage, this.x, this.currentAttackReaction);
@@ -322,7 +330,8 @@ export class Enemy extends Entity {
   }
 
   private tryDownedAttack(player: Player, dist: number): boolean {
-    if (!player.canReceiveGroundHit || dist >= this.DOWN_ATTACK_RANGE || this.attackCooldown > 0) return false;
+    if (dist >= this.DOWN_ATTACK_RANGE || this.attackCooldown > 0) return false;
+    if (!player.canReceiveGroundHit && !(DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) return false;
     this.state = 'downAttack';
     this.stateTimer = 0.5;
     this.animTimer = 0;
@@ -350,6 +359,7 @@ export class Enemy extends Entity {
         this.velocityX = 0;
         this.attackHit = false;
         this.tryingGrab = false;
+        this.mirrorGrabFollowupBodyBlow = false;
       }
     } else if (followupDist >= 8) {
       this.state = 'walk';
@@ -362,10 +372,16 @@ export class Enemy extends Entity {
   }
 
   private tryGrabAttempt(player: Player, dx: number, dist: number, canGrab: boolean): boolean {
+    const grabChance = player.canReceivePostGameHit ? this.POST_GAME_GRAB_ATTEMPT_CHANCE : this.GRAB_ATTEMPT_CHANCE;
     if (player.isGrabbed && !this.isHoldingPlayer) {
       this.state = 'idle';
       this.velocityX = 0;
       return true;
+    }
+
+    if (this.tryingGrab && !canGrab) {
+      this.tryingGrab = false;
+      return false;
     }
 
     if (canGrab && dist < this.GRAB_APPROACH_RANGE && dist >= this.GRAB_RANGE && this.tryingGrab) {
@@ -374,7 +390,7 @@ export class Enemy extends Entity {
       return true;
     }
 
-    if (canGrab && dist < this.GRAB_RANGE && (this.tryingGrab || Math.random() < this.GRAB_ATTEMPT_CHANCE)) {
+    if (canGrab && dist < this.GRAB_RANGE && (this.tryingGrab || Math.random() < grabChance)) {
       this.state = 'grab';
       this.stateTimer = this.GRAB_DURATION;
       this.grabTickTimer = 0;
@@ -382,7 +398,11 @@ export class Enemy extends Entity {
       this.velocityX = 0;
       this.attackHit = false;
       this.tryingGrab = false;
-      player.startGrabbed(this.x);
+      if (player.canReceivePostGameHit) {
+        player.startPostGameGrabbed(this.x);
+      } else {
+        player.startGrabbed(this.x);
+      }
       return true;
     }
     return false;
@@ -391,7 +411,8 @@ export class Enemy extends Entity {
   private tryStandingAttack(_player: Player, dx: number, dist: number, canGrab: boolean): boolean {
     if (dist >= this.ATTACK_RANGE || this.attackCooldown > 0) return false;
 
-    if (canGrab && dist < this.GRAB_APPROACH_RANGE && Math.random() < this.GRAB_ATTEMPT_CHANCE) {
+    const grabChance = _player.canReceivePostGameHit ? this.POST_GAME_GRAB_ATTEMPT_CHANCE : this.GRAB_ATTEMPT_CHANCE;
+    if (canGrab && dist < this.GRAB_APPROACH_RANGE && Math.random() < grabChance) {
       this.tryingGrab = true;
       this.state = 'walk';
       this.velocityX = Math.sign(dx) * this.MOVE_SPEED * 0.85;
@@ -470,7 +491,7 @@ export class Enemy extends Entity {
   }
 
   private nextStandingAttackKind(): StandingAttackKind {
-    const pattern: StandingAttackKind[] = ['light', 'bodyBlow', 'light', 'heavy'];
+    const pattern: StandingAttackKind[] = ['light', 'heavy', 'light', 'light'];
     const attack = pattern[this.attackPatternIndex % pattern.length];
     this.attackPatternIndex++;
     return attack;
@@ -507,8 +528,8 @@ export class Enemy extends Entity {
     }
   }
   
-  takeDamage(amount: number, fromX?: number): void {
-    this.health -= amount;
+  takeDamage(amount: number, fromX?: number): boolean {
+    this.health = Math.max(0, this.health - amount);
     const knockDir = fromX !== undefined ? (fromX > this.x ? 1 : -1) : this.facing;
     if (this.health <= 0) {
       this.state = 'death';
@@ -516,11 +537,12 @@ export class Enemy extends Entity {
       this.velocityX = knockDir * -120;
       this.attackHit = false;
       this.onDeath?.(this.x + this.width / 2, this.y + this.height / 3);
-      return;
+      return true;
     }
     this.state = 'hurt';
     this.stateTimer = 0.2;
     this.velocityX = knockDir * -80;
+    return true;
   }
   
   /** Current attack hitbox in world coords, or null if not on strike frame */

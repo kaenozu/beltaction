@@ -54,8 +54,25 @@ describe('ChainEnemy', () => {
       expect(enemy.facing).toBe(1);
     });
 
-    it('wraps the player after pulling them close enough with the chain', () => {
-      player.x = 180;
+    it('keeps pulling from long range instead of wrapping on a timer', () => {
+      player.x = 360;
+      enemy.x = 100;
+      enemy.state = 'boundPull';
+      enemy.facing = 1;
+      (enemy as unknown as { stateTimer: number }).stateTimer = 6;
+      player.startBound(enemy.x + enemy.width / 2, 6, 70, 0);
+
+      enemy.update(0.2);
+
+      expect(enemy.state).toBe('boundPull');
+      expect(player.state).toBe('bound');
+      expect(player.isChainWrapped).toBe(false);
+      expect(player.x).toBeGreaterThan(300);
+      expect(player.x).toBeLessThan(360);
+    });
+
+    it('grapples the player after pulling them all the way to the chain enemy', () => {
+      player.x = 130;
       enemy.x = 100;
       enemy.state = 'boundPull';
       enemy.facing = 1;
@@ -65,11 +82,11 @@ describe('ChainEnemy', () => {
 
       expect(enemy.state).toBe('chainBind');
       expect(player.state).toBe('bound');
-      expect(player.isChainWrapped).toBe(true);
+      expect(player.isBound).toBe(true);
     });
 
     it('keeps the chain wrap without dealing follow-up body blow damage itself', () => {
-      player.x = 180;
+      player.x = 130;
       enemy.x = 100;
       enemy.state = 'boundPull';
       enemy.facing = 1;
@@ -81,12 +98,12 @@ describe('ChainEnemy', () => {
 
       expect(enemy.state).toBe('chainBind');
       expect(player.state).toBe('bound');
-      expect(player.isChainWrapped).toBe(true);
+      expect(player.isBound).toBe(true);
       expect(player.health).toBe(healthAfterWrap);
     });
 
     it('keeps the chain wrap long enough for another enemy to follow up', () => {
-      player.x = 180;
+      player.x = 130;
       enemy.x = 100;
       enemy.state = 'boundPull';
       enemy.facing = 1;
@@ -97,7 +114,54 @@ describe('ChainEnemy', () => {
 
       expect(enemy.state).toBe('chainBind');
       expect(player.state).toBe('bound');
-      expect(player.isChainWrapped).toBe(true);
+      expect(player.isBound).toBe(true);
+    });
+
+    it('releases the chain wrap when the bind timer expires', () => {
+      player.x = 130;
+      enemy.x = 100;
+      enemy.state = 'boundPull';
+      enemy.facing = 1;
+      player.startBound(enemy.x + enemy.width / 2, 1, 165, 0);
+
+      enemy.update(0.016);
+      enemy.update(6);
+
+      expect(enemy.state).toBe('idle');
+      expect(player.state).toBe('idle');
+      expect(player.isChainWrapped).toBe(false);
+    });
+
+    it('cancels the pull if the player is released by another state change', () => {
+      player.x = 260;
+      enemy.x = 100;
+      enemy.state = 'boundPull';
+      enemy.facing = 1;
+      (enemy as unknown as { stateTimer: number }).stateTimer = 0.1;
+      player.startBound(enemy.x + enemy.width / 2, 1, 165, 0);
+      player.releaseBound();
+
+      enemy.update(0.016);
+
+      expect(enemy.state).toBe('idle');
+      expect(enemy.isGrapplingPlayer).toBe(false);
+      expect(player.state).toBe('idle');
+      expect(player.isChainWrapped).toBe(false);
+    });
+
+    it('does not enter chain wrap when the pull timer expires after the player was released', () => {
+      player.x = 260;
+      enemy.x = 100;
+      enemy.state = 'boundPull';
+      enemy.facing = 1;
+      player.startBound(enemy.x + enemy.width / 2, 1, 165, 0);
+      player.releaseBound();
+
+      enemy.update(1);
+
+      expect(enemy.state).toBe('idle');
+      expect(player.state).toBe('idle');
+      expect(player.isChainWrapped).toBe(false);
     });
   });
 

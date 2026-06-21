@@ -10,7 +10,7 @@ describe('Enemy', () => {
     player = new Player(300, 288);
     player.setInput({
       up: false, down: false, left: false, right: false,
-      attack: false, kick: false,
+      attack: false, kick: false, jump: false,
     });
     enemy = new Enemy(100, 288, () => player);
   });
@@ -103,6 +103,32 @@ describe('Enemy', () => {
       expect(player.isDoubleGrabbed).toBe(true);
     });
 
+    it('does not mirror the chain follow-up body blow when punching from the left side', () => {
+      player.x = 300;
+      player.startBound(500, 2, 0, 0);
+      player.startChainWrapped(2);
+      enemy.x = player.grabFollowupX;
+
+      enemy.update(0.016);
+
+      expect(enemy.state).toBe('grabFollowup');
+      expect(enemy.x).toBeLessThan(player.x);
+      expect(enemy.mirrorGrabFollowupBodyBlow).toBe(false);
+    });
+
+    it('mirrors the chain follow-up body blow when punching from the right side', () => {
+      player.x = 300;
+      player.startBound(100, 2, 0, 0);
+      player.startChainWrapped(2);
+      enemy.x = player.grabFollowupX;
+
+      enemy.update(0.016);
+
+      expect(enemy.state).toBe('grabFollowup');
+      expect(enemy.x).toBeGreaterThan(player.x);
+      expect(enemy.mirrorGrabFollowupBodyBlow).toBe(true);
+    });
+
     it('body blows chain-wrapped player after joining the grapple', () => {
       player.x = 300;
       enemy.x = 250;
@@ -113,14 +139,37 @@ describe('Enemy', () => {
       expect(enemy.state).toBe('grabFollowup');
 
       const healthBefore = player.health;
-      enemy.update(0.42);
+      for (let i = 0; i < 4; i++) {
+        enemy.update(0.42);
+        expect(player.state).toBe('bound');
+        expect(player.isChainWrapped).toBe(true);
+      }
 
+      enemy.update(0.42);
       expect(player.health).toBeLessThan(healthBefore);
-      expect(player.state).toBe('bound');
-      expect(player.isDoubleGrabbed).toBe(true);
+      expect(player.state).toBe('downhit');
+      expect(player.isChainWrapped).toBe(false);
+      expect(player.isDoubleGrabbed).toBe(false);
     });
 
-    it('does not treat regular body blow as a grappling follow-up', () => {
+    it('damages a chain-pulled player without knocking them out of the pull', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(1);
+      player.x = 300;
+      enemy.x = 245;
+      player.startBound(100, 6, 70, 0);
+
+      enemy.update(0.016);
+      enemy.update(0.26);
+      enemy.update(0.016);
+
+      expect(player.health).toBeLessThan(100);
+      expect(player.state).toBe('bound');
+      expect(player.isBound).toBe(true);
+      expect(player.isDowned).toBe(false);
+      expect(player.velocityX).toBe(0);
+    });
+
+    it('does not use body blow as a regular standing attack', () => {
       vi.spyOn(Math, 'random').mockReturnValue(1);
       player.x = 300;
       enemy.x = 250;
@@ -130,7 +179,7 @@ describe('Enemy', () => {
       enemy.update(1.5);
       enemy.update(0.016);
 
-      expect(enemy.state).toBe('bodyBlow');
+      expect(enemy.state).not.toBe('bodyBlow');
       expect(enemy.isBodyBlowGrappler).toBe(false);
       expect(enemy.isGrapplingPlayer).toBe(false);
     });

@@ -34,6 +34,12 @@ export const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
   bodyBlow: 1.08,
 };
 
+export const HURT_HITSTOP_BY_REACTION: Record<HitReactionType, number> = {
+  light: 0.03,
+  guardHead: 0.08,
+  bodyBlow: 0.05,
+};
+
 export type GroundHitPresentation = {
   stun: number;
   knockback: number;

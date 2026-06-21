@@ -5,6 +5,7 @@
  * 関連: Enemy.ts, ChainEnemy.ts, HitEffect.ts
  */
 
+import { CANVAS_HEIGHT, PLAYER_FRAME_HEIGHT } from '../engine/Constants';
 import { Entity } from '../engine/Entity';
 import { ChainEnemy } from '../entities/ChainEnemy';
 import { Enemy } from '../entities/Enemy';
@@ -23,6 +24,8 @@ export class SpawnSystem extends Entity {
   private _heavyAttackImage: HTMLImageElement | null = null;
   private _bodyBlowImage: HTMLImageElement | null = null;
   private _chainSpriteImage: HTMLImageElement | null = null;
+  private _chainHurtImage: HTMLImageElement | null = null;
+  private _chainDeathImage: HTMLImageElement | null = null;
   private _chainProjectileImage: HTMLImageElement | null = null;
   private playerAttackHits: Set<EnemyActor> = new Set();
   private effects: HitEffect[] = [];
@@ -30,7 +33,7 @@ export class SpawnSystem extends Entity {
   private readonly GRAB_FOLLOWUP_OFFSETS = [0, 26, -34, 52, -64, 78, -92];
   private readonly DOWNED_PRESSURE_OFFSETS = [64, -104, 134, -154, 38, -72, 178, -198];
   private readonly POST_GAME_PRESSURE_OFFSETS = [44, -44, 82, -82, 120, -120, 158, -158];
-  private readonly GROUND_Y = 480 - 192;
+  private readonly GROUND_Y = CANVAS_HEIGHT - PLAYER_FRAME_HEIGHT;
   
   get spriteImage(): HTMLImageElement | null { return this._spriteImage; }
   set spriteImage(img: HTMLImageElement | null) {
@@ -53,6 +56,22 @@ export class SpawnSystem extends Entity {
         enemy.spriteImage = img ?? this._spriteImage;
         enemy.useFallbackDetails = img === null;
       }
+    }
+  }
+
+  get chainHurtImage(): HTMLImageElement | null { return this._chainHurtImage; }
+  set chainHurtImage(img: HTMLImageElement | null) {
+    this._chainHurtImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof ChainEnemy) enemy.hurtImage = img;
+    }
+  }
+
+  get chainDeathImage(): HTMLImageElement | null { return this._chainDeathImage; }
+  set chainDeathImage(img: HTMLImageElement | null) {
+    this._chainDeathImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof ChainEnemy) enemy.deathImage = img;
     }
   }
 
@@ -96,7 +115,6 @@ export class SpawnSystem extends Entity {
   }
   
   override update(dt: number): void {
-    if (!this._spriteImage) return;
     this.assignEnemyTargets();
     for (const enemy of this.enemies) {
       if (enemy.active) enemy.update(dt);
@@ -154,7 +172,8 @@ export class SpawnSystem extends Entity {
     activeEnemies
       .sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))
       .forEach((enemy, index) => {
-        if (player.isGrabbed && enemy.isGrapplingPlayer) {
+        const isRestrainedForFollowup = player.isGrabbed || player.isChainWrapped;
+        if (isRestrainedForFollowup && enemy.isGrapplingPlayer) {
           enemy.setTargetX(enemy.x);
           return;
         }
@@ -162,7 +181,7 @@ export class SpawnSystem extends Entity {
         const fallbackStep = Math.floor(index / 2) + 1;
         const fallbackSide = index % 2 === 0 ? 1 : -1;
         const postGamePressure = player.isGameOver && DebugFlags.allowPostGameOverAttacks;
-        if (player.isGrabbed) {
+        if (isRestrainedForFollowup) {
           const offset = this.GRAB_FOLLOWUP_OFFSETS[grabFollowupIndex]
             ?? grabFollowupIndex * 24;
           grabFollowupIndex++;
@@ -195,10 +214,15 @@ export class SpawnSystem extends Entity {
     if (enemy instanceof ChainEnemy) {
       enemy.useFallbackDetails = this.chainSpriteImage === null;
       enemy.chainImage = this.chainProjectileImage;
+      enemy.hurtImage = this.chainHurtImage;
+      enemy.deathImage = this.chainDeathImage;
+      enemy.heavyAttackImage = this.heavyAttackImage;
+      enemy.bodyBlowImage = this.bodyBlowImage;
+    } else {
+      enemy.hurtImage = this.hurtImage;
+      enemy.heavyAttackImage = this.heavyAttackImage;
+      enemy.bodyBlowImage = this.bodyBlowImage;
     }
-    enemy.hurtImage = this.hurtImage;
-    enemy.heavyAttackImage = this.heavyAttackImage;
-    enemy.bodyBlowImage = this.bodyBlowImage;
     enemy.onHit = (x: number, y: number, overlay: boolean = false) => this.spawnHitEffect(x, y, overlay);
     enemy.onHitStop = this.onHitStop;
     enemy.onDeath = (x: number, y: number) => this.spawnHitEffect(x, y);
