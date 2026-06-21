@@ -42,7 +42,13 @@ export class PlayerRenderer {
     } else if (this.player.state === 'jump' && this.player.jumpImage) {
       ctx.drawImage(this.player.jumpImage, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
     } else if (this.player.state === 'death' && this.player.deathImage) {
-      ctx.drawImage(this.player.deathImage, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
+      if (this.player.hurtDrawScale > 1 && this.player.hurtImage) {
+        const sx = this.player.currentFrame * this.player.frameWidth;
+        const s = this.player.hurtDrawScale;
+        ctx.drawImage(this.player.hurtImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width * s / 2, this.player.y - this.player.height * (s - 1), this.player.width * s, this.player.height * s);
+      } else {
+        ctx.drawImage(this.player.deathImage, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
+      }
     } else if (this.player.state === 'hurt' && this.player.hurtImage) {
       this.renderHurtSprite(ctx);
     } else if ((this.player.state === 'grabbed' || this.player.state === 'bound') && (this.player.grabbedImage || this.player.hurtImage)) {

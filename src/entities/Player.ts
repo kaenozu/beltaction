@@ -40,6 +40,7 @@ export class Player extends Entity {
   }
   onDeath: (() => void) | null = null;
   requestHitStop: ((duration: number) => void) | null = null;
+  requestSlowMotion: ((duration: number, factor: number) => void) | null = null;
   private stateTimer: number = 0;
   private recoveryTimer: number = 0;
   private postGameGroundHitCount: number = 0;
@@ -388,6 +389,7 @@ export class Player extends Entity {
           this.rapidCount = Math.max(0, this.rapidCount - 1);
           this.currentAttackKind = null;
         } else if (this.state === 'death') {
+          this.hurtDrawScale = 1;
           this.setState('down');
           this.velocityX = 0;
           this.velocityY = 0;
@@ -468,10 +470,13 @@ export class Player extends Entity {
     this.recoveryTimer = 0;
     this.gameOverAnnounced = false;
     this.animTimer = 0;
-    this.currentFrame = 0;
+    this.currentFrame = HURT_FRAME_BY_REACTION.guardHead % this.HURT_FRAME_COUNT;
+    this.hurtDrawScale = 1.08;
     this.velocityX = fromX > this.x ? -120 : 120;
     this.velocityY = -250;
     this.facing = fromX > this.x ? 1 : -1;
+    this.requestSlowMotion?.(0.5, 0.2);
+    this.requestHitStop?.(0.1);
   }
 
   public downHit(fromX: number, force: boolean = false, damage: number = 0, reaction: DownHitReactionType = 'body'): void {
@@ -786,6 +791,7 @@ export class Player extends Entity {
     this.followupGrabberX = null;
     this.boundEscapeProgress = 0;
     this.prevBoundResist = false;
+    this.wakeupInvincibleTimer = 0.3;
     this.velocityX = 0;
     this.velocityY = 0;
     this.setState('idle');
@@ -808,6 +814,7 @@ export class Player extends Entity {
     this.boundReadyForFollowup = false;
     this.velocityX = 0;
     this.velocityY = 0;
+    this.wakeupInvincibleTimer = 0.3;
     this.setState('idle');
   }
 

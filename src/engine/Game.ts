@@ -15,6 +15,8 @@ export class Game {
   private lastTime: number = 0;
   private running: boolean = false;
   private hitStopTimer: number = 0;
+  private slowMotionTimer: number = 0;
+  private slowMotionFactor: number = 1;
   private screenShakeTimer: number = 0;
   private screenShakeDuration: number = 0;
   private screenShakeMagnitude: number = 0;
@@ -50,6 +52,8 @@ export class Game {
     this.entities = this.entities.filter(e => e.persistOnRestart);
     this.cameraX = 0;
     this.hitStopTimer = 0;
+    this.slowMotionTimer = 0;
+    this.slowMotionFactor = 1;
     this.screenShakeTimer = 0;
     this.screenShakeDuration = 0;
     this.screenShakeMagnitude = 0;
@@ -57,6 +61,12 @@ export class Game {
 
   requestHitStop(duration: number): void {
     this.hitStopTimer = Math.max(this.hitStopTimer, duration);
+  }
+
+  requestSlowMotion(duration: number, factor: number): void {
+    if (factor >= 1) return;
+    this.slowMotionTimer = Math.max(this.slowMotionTimer, duration);
+    this.slowMotionFactor = Math.min(this.slowMotionFactor, factor);
   }
 
   requestScreenShake(duration: number, magnitude: number): void {
@@ -79,6 +89,12 @@ export class Game {
   }
 
   private update(dt: number): void {
+    if (this.slowMotionTimer > 0) {
+      this.slowMotionTimer = Math.max(0, this.slowMotionTimer - dt);
+      dt *= this.slowMotionFactor;
+      if (this.slowMotionTimer <= 0) this.slowMotionFactor = 1;
+    }
+
     if (this.screenShakeTimer > 0) {
       this.screenShakeTimer = Math.max(0, this.screenShakeTimer - dt);
       if (this.screenShakeTimer <= 0) {

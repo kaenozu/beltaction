@@ -41,6 +41,7 @@ const stage = new StageManager();
 
 const player = new Player(100, 300);
 player.requestHitStop = (duration) => game.requestHitStop(duration);
+player.requestSlowMotion = (duration, factor) => game.requestSlowMotion(duration, factor);
 const spawner = new SpawnSystem(
   () => player,
   (duration = 0.06, shakeDuration = 0, shakeMagnitude = 0) => {
