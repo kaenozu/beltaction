@@ -646,7 +646,7 @@ export class Player extends Entity {
   }
 
   public receiveBoundBodyBlow(fromX: number, damage: number): boolean {
-    if (this.state !== 'bound') return false;
+    if (this.state !== 'bound' && this.state !== 'grabbed') return false;
     if (this.isDefeated && !DebugFlags.allowPostGameOverAttacks) return false;
     if (this.health > 0 && !DebugFlags.noPlayerHpDamage) {
       this.health = Math.max(0, this.health - damage);
@@ -730,11 +730,11 @@ export class Player extends Entity {
     if (!this.isDoubleGrabbed) return;
     if (this.health <= 0 && !DebugFlags.allowPostGameOverAttacks) return;
 
-    if (this.state === 'bound') {
+    if (this.state === 'bound' || this.state === 'grabbed') {
       this.velocityX = 0;
       this.velocityY = -80;
       this.startBoundBodyBlowHurt();
-      if (this.health > 0) {
+      if (this.state === 'bound' && this.health > 0) {
         this.chainBodyBlowCount++;
         if (this.chainBodyBlowCount >= this.CHAIN_BODY_BLOW_RELEASE_COUNT) {
           this.finishGrabFollowup();
@@ -742,12 +742,12 @@ export class Player extends Entity {
           this.tripDown(fromX, damage);
           return;
         }
-        if (!DebugFlags.noPlayerHpDamage) {
-          this.health = Math.max(0, this.health - damage);
-          if (this.health <= 0) {
-            this.die(fromX);
-            return;
-          }
+      }
+      if (this.health > 0 && !DebugFlags.noPlayerHpDamage) {
+        this.health = Math.max(0, this.health - damage);
+        if (this.health <= 0) {
+          this.die(fromX);
+          return;
         }
       }
       return;

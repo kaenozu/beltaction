@@ -238,7 +238,9 @@ export class Enemy extends Entity {
   }
 
   private tryBoundBodyBlowBehaviour(player: Player, dt: number): boolean {
-    if (!player.isBound || !player.boundReadyForFollowup || this.attackCooldown > 0) return false;
+    if (!player.isBound && !player.isGrabbed) return false;
+    if (player.isBound && !player.boundReadyForFollowup) return false;
+    if (this.attackCooldown > 0) return false;
 
     const centerDx = this.getCenterDxToPlayer(player);
     const dist = Math.abs(centerDx);
@@ -292,7 +294,7 @@ export class Enemy extends Entity {
     if (player.canReceiveGroundHit || player.canBeKnockedDownByFollowup || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) {
       player.downHit(this.x, DebugFlags.allowPostGameOverAttacks, this.currentAttackDamage, this.currentDownHitReaction);
       this.attackCooldown = Math.max(this.attackCooldown, this.DOWNED_ATTACK_COOLDOWN);
-    } else if (player.isBound && this.currentAttackReaction === 'bodyBlow') {
+    } else if ((player.isBound || player.isGrabbed) && this.currentAttackReaction === 'bodyBlow') {
       player.receiveBoundBodyBlow(this.x + this.width / 2, this.currentAttackDamage);
     } else {
       player.takeDamage(this.currentAttackDamage, this.x, this.currentAttackReaction);

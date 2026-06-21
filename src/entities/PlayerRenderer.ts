@@ -73,7 +73,7 @@ export class PlayerRenderer {
 
 
   private renderGrabbedSprite(ctx: CanvasRenderingContext2D): void {
-    const hop = this.player.state === 'bound' ? this.player.boundBodyBlowHurtRatio * 4 : 0;
+    const hop = (this.player.state === 'bound' || this.player.state === 'grabbed') ? this.player.boundBodyBlowHurtRatio * 4 : 0;
     const y = this.player.y - hop;
     if (this.player.grabbedImage) {
       ctx.drawImage(this.player.grabbedImage, -this.player.width / 2, y, this.player.width, this.player.height);
