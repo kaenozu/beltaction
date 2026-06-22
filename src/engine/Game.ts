@@ -21,6 +21,8 @@ export class Game {
   private screenShakeDuration: number = 0;
   private screenShakeMagnitude: number = 0;
   cameraX: number = 0;
+  /** 内部解像度に対する描画スケール (例: 2 = 1280x960に描画) */
+  renderScale: number = 2;
   onFrame: (() => void) | null = null;
   drawUI: ((ctx: CanvasRenderingContext2D) => void) | null = null;
 
@@ -118,17 +120,19 @@ export class Game {
   }
 
   private render(): void {
-    this.ctx.imageSmoothingEnabled = false;
+    this.ctx.imageSmoothingEnabled = true;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const shakeX = this.getShakeOffset();
 
     this.ctx.save();
-    this.ctx.translate(shakeX, 0);
+    this.ctx.scale(this.renderScale, this.renderScale);
+    this.ctx.translate(shakeX / this.renderScale, 0);
     if (this.backgroundEntity) this.backgroundEntity.render(this.ctx);
     this.ctx.restore();
 
     this.ctx.save();
-    this.ctx.translate(-this.cameraX + shakeX, 0);
+    this.ctx.scale(this.renderScale, this.renderScale);
+    this.ctx.translate(-this.cameraX / this.renderScale + shakeX / this.renderScale, 0);
     const sorted = [...this.entities].sort((a, b) => a.zIndex - b.zIndex);
     for (const entity of sorted) {
       if (entity.active) entity.render(this.ctx);

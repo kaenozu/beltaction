@@ -9,7 +9,8 @@ import { CANVAS_HEIGHT, STAGE_WIDTH } from '../engine/Constants';
 import { Entity } from '../engine/Entity';
 import { InputState } from '../engine/InputManager';
 import { DebugFlags } from '../systems/DebugFlags';
-import { playHurtLight, playHurtHeavy, playDeath, playDownHit, playGrab, playChainBind } from '../systems/SoundManager';
+import { playHurtLight, playHurtHeavy, playGrab, playDeath, playDownHit, playChainBind, playSwish, stopBind } from '../systems/SoundManager';
+
 import { HitboxConfig, HitboxRect, MAKI_HITBOX, resolveFacingHitbox } from '../systems/HitboxConfig';
 import {
   type HitReactionType,
@@ -33,11 +34,11 @@ export class Player extends Entity {
   public velocityY: number = 0;
   private onGround: boolean = true;
   public facing: number = 1;
-  state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' | 'getup' | 'grabbed' | 'bound' = 'idle';
+  state: 'idle' | 'walk' | 'jump' | 'attack' | 'kick' | 'hurt' | 'death' | 'down' | 'downhit' | 'getup' | 'grabbed' | 'bound' | 'reverseCrab' = 'idle';
 
   private setState(s: typeof this.state): void {
     this.state = s;
-    this.zIndex = (s === 'down' || s === 'downhit' || s === 'getup') ? -1 : 0;
+    this.zIndex = (s === 'down' || s === 'downhit' || s === 'getup' || s === 'reverseCrab') ? -1 : 0;
   }
   onDeath: (() => void) | null = null;
   requestHitStop: ((duration: number) => void) | null = null;
@@ -50,6 +51,7 @@ export class Player extends Entity {
   private forceGetupAfterDownHit: boolean = false;
   private wakeupInvincibleTimer: number = 0;
   private gameOverAnnounced: boolean = false;
+  private mounted: boolean = false;
   private currentHitReaction: HitReactionType = 'light';
   public currentDownHitReaction: DownHitReactionType = 'body';
   private grabberX: number = 0;
@@ -87,8 +89,8 @@ export class Player extends Entity {
   private readonly GRAB_FOLLOWUP_IMPACT_DURATION = 0.18;
   private readonly GRAB_FOLLOWUP_IMPACT_DISTANCE = 10;
   private readonly BOUND_BODY_BLOW_HURT_DURATION = 0.22;
-  private readonly BOUND_ESCAPE_REQUIRED = 26;
-  private readonly BOUND_ESCAPE_DECAY_PER_SECOND = 8;
+  private readonly BOUND_ESCAPE_REQUIRED = 12;
+  private readonly BOUND_ESCAPE_DECAY_PER_SECOND = 4;
   private readonly GRAVITY = 1200;
   private readonly MOVE_SPEED = 220;
   private readonly JUMP_FORCE = -500;
@@ -116,42 +118,52 @@ export class Player extends Entity {
   public jumpImage: HTMLImageElement | null = null;
   public hurtImage: HTMLImageElement | null = null;
   public grabbedImage: HTMLImageElement | null = null;
+  public boundImage: HTMLImageElement | null = null;
   public deathImage: HTMLImageElement | null = null;
   public downImage: HTMLImageElement | null = null;
   public downHitImage: HTMLImageElement | null = null;
+  public mountPunchImage: HTMLImageElement | null = null;
+  public launchImage: HTMLImageElement | null = null;
+  public reverseCrabImage: HTMLImageElement | null = null;
   public getupImage: HTMLImageElement | null = null;
-  public readonly frameWidth = 160;
-  public readonly frameHeight = 192;
-  public readonly kickFrameWidth = 220;
+  public readonly frameWidth = 240;
+  public readonly frameHeight = 288;
+  public kickFrameWidth = 220;
   currentFrame: number = 0;
   currentAttackKind: 'punch' | 'kick' | null = null;
   private animTimer: number = 0;
-  private readonly WALK_FRAME_COUNT = 4;
-  private readonly HURT_FRAME_COUNT = 2;
-  private readonly GETUP_FRAME_COUNT = 2;
+  private walkFrameCount = 4;
+  private hurtFrameCount = 2;
+  private getupFrameCount = 2;
   private readonly ANIM_SPEED = 0.15;
   private prevAttack: boolean = false;
   private prevKick: boolean = false;
   public rapidCount: number = 0;
   public hurtDrawScale: number = 1.1;
-  /** attack/kick開始時のstateTimerを保存（アニメーションのフレーム閾値に使う） */
-  private attackDuration: number = 0;
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
-  private readonly KICK_HITBOX: HitboxRect = { x: 116, y: 58, w: 64, h: 34 };
+  private readonly KICK_HITBOX: HitboxRect = { x: 130, y: 62, w: 38, h: 34 };
   private readonly DOWNED_HURT_HITBOX: HitboxRect = { x: -24, y: 72, w: 208, h: 120 };
-  public readonly downSource = { x: 0, y: 0, w: 320, h: 192 };
-  public readonly downHitSource = { x: 0, y: 0, w: 320, h: 192 };
-  public readonly downDrawWidth = 224;
-  public readonly downHitDrawWidth = 208;
-  public readonly downDrawHeight = 134;
-  public readonly downHitDrawHeight = 125;
+  public downSource = { x: 0, y: 0, w: 320, h: 288 };
+  public downHitSource = { x: 0, y: 0, w: 320, h: 288 };
+  public mountPunchSource = { x: 0, y: 0, w: 320, h: 288 };
+  public launchSource = { x: 0, y: 0, w: 384, h: 288 };
+  public readonly downDrawWidth = 120;
+  public readonly downHitDrawWidth = 112;
+  public readonly mountPunchDrawWidth = 112;
+  public readonly launchDrawWidth = 160;
+  public readonly downDrawHeight = 144;
+  public readonly downHitDrawHeight = 135;
+  public readonly mountPunchDrawHeight = 135;
+  public readonly launchDrawHeight = 120;
   get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
   get isGameOver(): boolean { return this.gameOverAnnounced; }
   get isLowHealth(): boolean { return this.health > 0 && this.health <= this.LOW_HEALTH_THRESHOLD; }
   get isDowned(): boolean { return this.state === 'down' || this.state === 'downhit' || this.state === 'getup'; }
   get isWakeupInvincible(): boolean { return this.wakeupInvincibleTimer > 0 || this.state === 'getup'; }
   get isGrabbed(): boolean { return this.state === 'grabbed'; }
+  get isReverseCrabbed(): boolean { return this.state === 'reverseCrab'; }
   get isBound(): boolean { return this.state === 'bound'; }
+  get isMounted(): boolean { return this.mounted; }
   get isChainWrapped(): boolean { return this.chainWrapped; }
   get chainWrappedProgress(): number {
     if (!this.chainWrapped || this.chainWrappedDuration <= 0) return 0;
@@ -167,7 +179,7 @@ export class Player extends Entity {
   get isDoubleGrabbed(): boolean { return (this.state === 'grabbed' || this.isBound) && this.followupGrabberX !== null; }
   get boundEscapeRatio(): number { return Math.max(0, Math.min(1, this.boundEscapeProgress / this.BOUND_ESCAPE_REQUIRED)); }
   private get canBeInteractedWith(): boolean {
-    return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isBound && !this.isWakeupInvincible;
+    return this.onGround && !this.isDefeated && !this.isDowned && !this.isGrabbed && !this.isReverseCrabbed && !this.isBound && !this.isWakeupInvincible;
   }
   get damageStage(): number {
     if (this.health > 70) return 0;
@@ -189,7 +201,7 @@ export class Player extends Entity {
   get grabFollowupHitX(): number { return this.x + this.width / 2 + this.grabFollowupDirection * 8; }
   get grabFollowupHitY(): number { return this.y + this.height * 0.54; }
   get canBeKnockedDownByFollowup(): boolean {
-    return this.state === 'hurt' && this.currentHitReaction === 'guardHead';
+    return this.state === 'hurt' && (this.currentHitReaction === 'guardHead' || this.currentHitReaction === 'kneeBuckle');
   }
   get canReceiveGroundHit(): boolean {
     return (this.state === 'down' || this.state === 'downhit') && !this.gameOverAnnounced && !this.forceGetupAfterDownHit && !this.isWakeupInvincible;
@@ -200,10 +212,28 @@ export class Player extends Entity {
   
   constructor(x: number, y: number) {
     super(x, y);
-    this.width = this.frameWidth;
-    this.height = this.frameHeight;
+    this.width = 160;
+    this.height = 192;
   }
   private playerRenderer = new PlayerRenderer(this);
+
+  applySpriteProfile(profile: {
+    walkFrames: number;
+    hurtFrames: number;
+    getupFrames: number;
+    kickFrameWidth: number;
+    downSourceWidth: number;
+    downHitSourceWidth: number;
+    mountPunchSourceWidth: number;
+  }): void {
+    this.walkFrameCount = profile.walkFrames;
+    this.hurtFrameCount = profile.hurtFrames;
+    this.getupFrameCount = profile.getupFrames;
+    this.kickFrameWidth = profile.kickFrameWidth;
+    this.downSource = { ...this.downSource, w: profile.downSourceWidth };
+    this.downHitSource = { ...this.downHitSource, w: profile.downHitSourceWidth };
+    this.mountPunchSource = { ...this.mountPunchSource, w: profile.mountPunchSourceWidth };
+  }
 
   restart(x: number, y: number): void {
     this.x = x;
@@ -273,13 +303,13 @@ export class Player extends Entity {
     if (this.boundBodyBlowHurtTimer <= 0) return;
     this.boundBodyBlowHurtTimer = Math.max(0, this.boundBodyBlowHurtTimer - dt);
     if (this.boundBodyBlowHurtTimer <= 0) {
-      this.currentFrame = HURT_FRAME_BY_REACTION.guardHead % this.HURT_FRAME_COUNT;
+      this.currentFrame = HURT_FRAME_BY_REACTION.guardHead % this.hurtFrameCount;
       this.hurtDrawScale = 1;
     }
   }
 
   private updateBoundResistance(dt: number): void {
-    if (this.state !== 'bound' && this.state !== 'grabbed') {
+    if (this.state !== 'bound' && this.state !== 'grabbed' && this.state !== 'reverseCrab') {
       this.prevBoundResist = false;
       this.boundEscapeProgress = 0;
       return;
@@ -288,17 +318,20 @@ export class Player extends Entity {
 
     const resisting = this.inputState.left || this.inputState.right || this.inputState.attack || this.inputState.kick;
     if (resisting && !this.prevBoundResist) {
-      this.boundEscapeProgress += 2.6;
+      this.boundEscapeProgress += this.state === 'reverseCrab' ? 4.5 : 3.5;
     } else if (resisting) {
-      this.boundEscapeProgress += 20 * dt;
+      this.boundEscapeProgress += (this.state === 'reverseCrab' ? 28 : 28) * dt;
     } else {
       this.boundEscapeProgress = Math.max(0, this.boundEscapeProgress - this.BOUND_ESCAPE_DECAY_PER_SECOND * dt);
     }
     this.prevBoundResist = resisting;
 
-    if (this.boundEscapeProgress >= this.BOUND_ESCAPE_REQUIRED) {
+    const escapeRequired = this.state === 'reverseCrab' ? 8 : this.BOUND_ESCAPE_REQUIRED;
+    if (this.boundEscapeProgress >= escapeRequired) {
       if (this.state === 'grabbed') {
         this.releaseGrab();
+      } else if (this.state === 'reverseCrab') {
+        this.releaseReverseCrab();
       } else {
         this.releaseBound();
       }
@@ -316,15 +349,21 @@ export class Player extends Entity {
       this.animTimer += dt;
       if (this.animTimer >= this.ANIM_SPEED) {
         this.animTimer = 0;
-        this.currentFrame = (this.currentFrame + 1) % this.WALK_FRAME_COUNT;
+        this.currentFrame = (this.currentFrame + 1) % this.walkFrameCount;
+      }
+    } else if (this.state === 'jump') {
+      if (this.currentFrame < 2) {
+        this.animTimer += dt;
+        if (this.animTimer >= 0.12) {
+          this.animTimer = 0;
+          this.currentFrame++;
+        }
       }
     } else if (this.state === 'attack' || this.state === 'kick') {
-      const half = this.attackDuration / 2;
-      this.currentFrame = this.animTimer >= half ? 1 : 0;
       this.animTimer += dt;
     } else if (this.state === 'getup') {
-      const frameDuration = this.GETUP_DURATION / this.GETUP_FRAME_COUNT;
-      this.currentFrame = Math.min(this.GETUP_FRAME_COUNT - 1, Math.floor(this.animTimer / frameDuration));
+      const frameDuration = this.GETUP_DURATION / this.getupFrameCount;
+      this.currentFrame = Math.min(this.getupFrameCount - 1, Math.floor(this.animTimer / frameDuration));
       this.animTimer += dt;
     } else if (this.state === 'hurt') {
       this.animTimer = 0;
@@ -335,7 +374,7 @@ export class Player extends Entity {
   }
   
   private handleInput(): void {
-    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'kick' || this.state === 'death' || this.state === 'down' || this.state === 'downhit' || this.state === 'getup' || this.state === 'grabbed' || this.state === 'bound') return;
+    if (this.state === 'hurt' || this.state === 'attack' || this.state === 'kick' || this.state === 'death' || this.state === 'down' || this.state === 'downhit' || this.state === 'getup' || this.state === 'grabbed' || this.state === 'reverseCrab' || this.state === 'bound') return;
     
     // Horizontal movement
     const moveSpeed = this.isLowHealth ? this.MOVE_SPEED * this.LOW_HEALTH_MOVE_SPEED_MULTIPLIER : this.MOVE_SPEED;
@@ -356,6 +395,8 @@ export class Player extends Entity {
     if ((this.inputState.jump || this.inputState.up) && this.onGround) {
       this.velocityY = this.JUMP_FORCE;
       this.onGround = false;
+      this.currentFrame = 0;
+      this.animTimer = 0;
       this.setState('jump');
     }
     
@@ -365,11 +406,12 @@ export class Player extends Entity {
     if (attackDown && this.onGround) {
       this.setState('attack');
       this.currentAttackKind = 'punch';
+      playSwish();
       this.animTimer = 0;
       this.rapidCount++;
       // Each rapid press makes attack faster (0.3 → 0.15 min)
       this.stateTimer = Math.max(0.12, 0.3 - this.rapidCount * 0.03);
-      this.attackDuration = this.stateTimer;
+      this.currentFrame = 1;
       this.velocityX = 0;
     }
 
@@ -378,10 +420,10 @@ export class Player extends Entity {
     if (kickDown && this.onGround) {
       this.setState('kick');
       this.currentAttackKind = 'kick';
+      playSwish();
       this.animTimer = 0;
-      this.currentFrame = 0;
       this.stateTimer = 0.34;
-      this.attackDuration = this.stateTimer;
+      this.currentFrame = 1;
       this.velocityX = 0;
     }
     
@@ -426,6 +468,9 @@ export class Player extends Entity {
         } else if (this.state === 'grabbed') {
           this.releaseGrab();
           return;
+        } else if (this.state === 'reverseCrab') {
+          this.releaseReverseCrab();
+          return;
         } else if (this.state === 'bound') {
           this.releaseBound();
           return;
@@ -438,7 +483,7 @@ export class Player extends Entity {
   }
 
   private updateRecovery(dt: number): void {
-    if (this.health <= 0 || this.state !== 'down' || this.recoveryTimer <= 0) return;
+    if (this.health <= 0 || this.state !== 'down' || this.recoveryTimer <= 0 || this.mounted) return;
     this.recoveryTimer = Math.max(0, this.recoveryTimer - dt);
     if (this.recoveryTimer <= 0) {
       this.startGetup(false);
@@ -478,7 +523,7 @@ export class Player extends Entity {
     this.recoveryTimer = 0;
     this.gameOverAnnounced = false;
     this.animTimer = 0;
-    this.currentFrame = HURT_FRAME_BY_REACTION.guardHead % this.HURT_FRAME_COUNT;
+    this.currentFrame = HURT_FRAME_BY_REACTION.guardHead % this.hurtFrameCount;
     this.hurtDrawScale = 1.08;
     this.velocityX = fromX > this.x ? -120 : 120;
     this.velocityY = -250;
@@ -487,8 +532,8 @@ export class Player extends Entity {
     this.requestHitStop?.(0.1);
   }
 
-  public downHit(fromX: number, force: boolean = false, damage: number = 0, reaction: DownHitReactionType = 'body'): void {
-    playDownHit();
+  public downHit(fromX: number, force: boolean = false, damage: number = 0, reaction: DownHitReactionType = 'body', silent: boolean = false): void {
+    if (!silent) playDownHit();
     if (!force && !this.canReceiveGroundHit && !this.canBeKnockedDownByFollowup) return;
     if (force && !this.canReceivePostGameHit) return;
     if (force) {
@@ -566,7 +611,7 @@ export class Player extends Entity {
     this.currentHitReaction = reaction;
     this.recoveryTimer = 0;
     this.animTimer = 0;
-    this.currentFrame = HURT_FRAME_BY_REACTION[reaction] % this.HURT_FRAME_COUNT;
+    this.currentFrame = HURT_FRAME_BY_REACTION[reaction] % this.hurtFrameCount;
     this.hurtDrawScale = HURT_DRAW_SCALE_BY_REACTION[reaction];
     if (fromX !== undefined) {
       this.facing = fromX > this.x ? 1 : -1;
@@ -617,9 +662,31 @@ export class Player extends Entity {
     this.prevBoundResist = false;
   }
 
+  public startReverseCrab(grabberX: number): boolean {
+    if (!this.isDowned || this.isWakeupInvincible) return false;
+    playGrab();
+    this.grabberX = grabberX;
+    this.grabOffsetX = grabberX > this.x ? -36 : 36;
+    this.facing = grabberX > this.x ? 1 : -1;
+    this.setState('reverseCrab');
+    this.stateTimer = 0;
+    this.recoveryTimer = 0;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.animTimer = 0;
+    this.currentFrame = 0;
+    this.hurtDrawScale = 1;
+    this.followupGrabberX = null;
+    this.grabImpactTimer = 0;
+    this.grabImpactDirection = 0;
+    this.boundEscapeProgress = 0;
+    this.prevBoundResist = false;
+    return true;
+  }
+
   public startBound(attackerX: number, duration: number, pullSpeed: number, damage: number, force: boolean = false): boolean {
     if (!force && !this.canBeBound) return false;
-    playChainBind();
+    playGrab();
     if (!DebugFlags.noPlayerHpDamage && damage > 0 && this.health > 0) {
       this.health = Math.max(0, this.health - damage);
       if (this.health <= 0) {
@@ -743,6 +810,7 @@ export class Player extends Entity {
 
   public finishGrabFollowup(): void {
     this.followupGrabberX = null;
+    stopBind();
   }
 
   public receiveGrabFollowupHit(fromX: number, damage: number): void {
@@ -753,14 +821,13 @@ export class Player extends Entity {
       this.velocityX = 0;
       this.velocityY = -80;
       this.startBoundBodyBlowHurt();
-      if (this.state === 'bound' && this.health > 0) {
-        this.chainBodyBlowCount++;
-        if (this.chainBodyBlowCount >= this.CHAIN_BODY_BLOW_RELEASE_COUNT) {
-          this.finishGrabFollowup();
-          this.releaseBound();
-          this.tripDown(fromX, damage);
-          return;
-        }
+      if (this.state === 'bound') playHurtHeavy();
+      this.chainBodyBlowCount++;
+      if (this.state === 'bound' && this.chainBodyBlowCount >= this.CHAIN_BODY_BLOW_RELEASE_COUNT) {
+        this.finishGrabFollowup();
+        this.releaseBound();
+        this.tripDown(fromX, damage);
+        return;
       }
       if (this.health > 0 && !DebugFlags.noPlayerHpDamage) {
         this.health = Math.max(0, this.health - damage);
@@ -802,6 +869,7 @@ export class Player extends Entity {
 
   public releaseGrab(): void {
     if (this.state !== 'grabbed') return;
+    stopBind();
     this.followupGrabberX = null;
     this.boundEscapeProgress = 0;
     this.prevBoundResist = false;
@@ -811,8 +879,22 @@ export class Player extends Entity {
     this.setState('idle');
   }
 
+  public releaseReverseCrab(): void {
+    if (this.state !== 'reverseCrab') return;
+    stopBind();
+    this.followupGrabberX = null;
+    this.boundEscapeProgress = 0;
+    this.prevBoundResist = false;
+    this.wakeupInvincibleTimer = 0.35;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.setState('down');
+    this.recoveryTimer = this.getDownRecoveryDuration();
+  }
+
   public releaseBound(): void {
     if (this.state !== 'bound') return;
+    stopBind();
     this.boundPullSpeed = 0;
     this.followupGrabberX = null;
     this.chainWrapped = false;
@@ -849,6 +931,10 @@ export class Player extends Entity {
     return this.isLowHealth ? this.LOW_HEALTH_DOWN_RECOVERY_DURATION : this.DOWN_RECOVERY_DURATION;
   }
 
+  setMounted(mounted: boolean): void {
+    this.mounted = mounted;
+  }
+
   private startGetup(forceInvincible: boolean): void {
     this.setState('getup');
     this.stateTimer = this.GETUP_DURATION;
@@ -865,7 +951,6 @@ export class Player extends Entity {
   
   /** Current attack hitbox in world coords, or null if not on strike frame */
   getAttackHitbox(): HitboxRect | null {
-    if (this.currentFrame !== 1) return null;
     if (this.state === 'attack') return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
     if (this.state === 'kick') return resolveFacingHitbox(this, this.KICK_HITBOX, this.facing);
     return null;
@@ -880,7 +965,7 @@ export class Player extends Entity {
   }
 
   getHurtHitbox(): HitboxRect {
-    if (this.state === 'down' || this.state === 'downhit') {
+    if (this.state === 'down' || this.state === 'downhit' || this.state === 'reverseCrab') {
       return resolveFacingHitbox(this, this.DOWNED_HURT_HITBOX, this.facing);
     }
     return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.hurt, this.facing);

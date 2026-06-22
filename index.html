@@ -6,7 +6,17 @@
   <title>Maki Beat 'Em Up</title>
   <style>
     body { margin: 0; padding: 0; background: #000; overflow: hidden; }
-    canvas { display: block; margin: 0 auto; background: #111; }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #111;
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: contain;
+      image-rendering: auto;
+    }
     #hud { position: absolute; top: 10px; left: 10px; color: #fff; font-family: monospace; font-size: 16px; z-index: 10; }
     #shortcuts {
       position: absolute;
@@ -29,16 +39,15 @@
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="640" height="480"></canvas>
+  <canvas id="gameCanvas" width="1280" height="960"></canvas>
   <div id="hud"></div>
   <div id="shortcuts" aria-label="Keyboard shortcuts">
-    <div><kbd>A/D</kbd> Move</div>
+    <div><kbd>WASD</kbd> Move</div>
     <div><kbd>Space</kbd> Jump</div>
-    <div><kbd>J</kbd> Attack</div>
-    <div><kbd>1</kbd> Grunt <kbd>2</kbd> Chain</div>
-    <div><kbd>B</kbd> Boxes</div>
-    <div><kbd>G</kbd> Post-KO hit</div>
-    <div><kbd>3-9</kbd> Reserved</div>
+    <div><kbd>J</kbd> Attack <kbd>K</kbd> Kick</div>
+    <div><kbd>1</kbd> Grunt <kbd>2</kbd> Chain <kbd>3</kbd> Mount <kbd>4</kbd> Strongman</div>
+    <div><kbd>R</kbd> Restart <kbd>M</kbd> Wave</div>
+    <div><kbd>B</kbd> Hitboxes <kbd>I</kbd> No-DMG <kbd>G</kbd> Post-KO <kbd>T</kbd> Trip</div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

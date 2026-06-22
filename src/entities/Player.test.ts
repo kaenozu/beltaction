@@ -89,6 +89,41 @@ describe('Player', () => {
     });
   });
 
+  describe('sprite profile', () => {
+    it('applies reduced frame counts for alternate Maki sprite sheets', () => {
+      player.applySpriteProfile({
+        walkFrames: 2,
+        hurtFrames: 4,
+        getupFrames: 2,
+        kickFrameWidth: 160,
+        downSourceWidth: 160,
+        downHitSourceWidth: 160,
+        mountPunchSourceWidth: 160,
+      });
+
+      expect(player.kickFrameWidth).toBe(160);
+      expect(player.downSource.w).toBe(160);
+      expect(player.downHitSource.w).toBe(160);
+      expect(player.mountPunchSource.w).toBe(160);
+    });
+
+    it('uses the extended heavy hurt frames when the active profile provides them', () => {
+      player.applySpriteProfile({
+        walkFrames: 2,
+        hurtFrames: 4,
+        getupFrames: 2,
+        kickFrameWidth: 160,
+        downSourceWidth: 160,
+        downHitSourceWidth: 160,
+        mountPunchSourceWidth: 160,
+      });
+
+      player.hurt(50, 'kneeBuckle');
+
+      expect(player.currentFrame).toBe(3);
+    });
+  });
+
   describe('die', () => {
     it('enters death state with knockback', () => {
       player.die(200);
@@ -205,6 +240,32 @@ describe('Player', () => {
       player.startGrabbed(200);
       player.updateGrabbedPosition(300);
       expect(player.x).toBe(258);
+    });
+  });
+
+  describe('reverse crab state', () => {
+    it('can start reverse crab from a downed state', () => {
+      player.tripDown(200);
+      player.startReverseCrab(220);
+      expect(player.state).toBe('reverseCrab');
+      expect(player.isReverseCrabbed).toBe(true);
+      expect(player.canBeGrabbed).toBe(false);
+    });
+
+    it('escapes reverse crab through resistance input', () => {
+      player.tripDown(200);
+      player.startReverseCrab(220);
+      player.setInput({
+        up: false, down: false, left: true, right: false,
+        attack: false, kick: false, jump: false,
+      });
+
+      for (let i = 0; i < 10; i++) {
+        player.update(1 / 60);
+      }
+
+      expect(player.state).toBe('down');
+      expect(player.isDowned).toBe(true);
     });
   });
 

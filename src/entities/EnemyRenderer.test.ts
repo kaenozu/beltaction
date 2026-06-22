@@ -38,7 +38,7 @@ describe('EnemyRenderer', () => {
     expect(scale).toHaveBeenNthCalledWith(2, -1, 1);
   });
 
-  it('flips the body blow sprite in grab-followup to match facing direction', () => {
+  it('hides grunt sprite during grab-followup (invisible)', () => {
     const player = new Player(300, 288);
     const enemy = new Enemy(100, 288, () => player);
     enemy.spriteImage = {} as HTMLImageElement;
@@ -46,6 +46,7 @@ describe('EnemyRenderer', () => {
     enemy.state = 'grabFollowup';
 
     const scale = vi.fn();
+    const drawImage = vi.fn();
     const ctx = {
       save: vi.fn(),
       restore: vi.fn(),
@@ -54,7 +55,7 @@ describe('EnemyRenderer', () => {
       fill: vi.fn(),
       translate: vi.fn(),
       scale,
-      drawImage: vi.fn(),
+      drawImage,
       fillRect: vi.fn(),
       fillText: vi.fn(),
       strokeRect: vi.fn(),
@@ -67,12 +68,12 @@ describe('EnemyRenderer', () => {
 
     new EnemyRenderer(enemy).render(ctx);
 
-    expect(scale).toHaveBeenCalledTimes(2);
-    expect(scale).toHaveBeenNthCalledWith(1, -enemy.facing, 1);
-    expect(scale).toHaveBeenNthCalledWith(2, -1, 1);
+    // Grunt is invisible during grabFollowup → scale only from setup, no draw
+    expect(scale).toHaveBeenCalledTimes(1);
+    expect(drawImage).not.toHaveBeenCalled();
   });
 
-  it('flips chain-grapple follow-up body blow sprites to face the restrained player correctly', () => {
+  it('hides grunt sprite during chain-grapple grab-followup (invisible)', () => {
     const player = new Player(300, 288);
     const enemy = new Enemy(100, 288, () => player);
     enemy.spriteImage = {} as HTMLImageElement;
@@ -81,6 +82,7 @@ describe('EnemyRenderer', () => {
     enemy.mirrorGrabFollowupBodyBlow = true;
 
     const scale = vi.fn();
+    const drawImage = vi.fn();
     const ctx = {
       save: vi.fn(),
       restore: vi.fn(),
@@ -89,7 +91,7 @@ describe('EnemyRenderer', () => {
       fill: vi.fn(),
       translate: vi.fn(),
       scale,
-      drawImage: vi.fn(),
+      drawImage,
       fillRect: vi.fn(),
       fillText: vi.fn(),
       strokeRect: vi.fn(),
@@ -102,8 +104,8 @@ describe('EnemyRenderer', () => {
 
     new EnemyRenderer(enemy).render(ctx);
 
-    expect(scale).toHaveBeenCalledTimes(2);
-    expect(scale).toHaveBeenNthCalledWith(1, -enemy.facing, 1);
-    expect(scale).toHaveBeenNthCalledWith(2, -1, 1);
+    // Grunt is invisible during grabFollowup → scale only from setup, no draw
+    expect(scale).toHaveBeenCalledTimes(1);
+    expect(drawImage).not.toHaveBeenCalled();
   });
 });

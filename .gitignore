@@ -6,3 +6,4 @@ tmp/
 .worktrees/
 .playwright-mcp/
 coverage/
+backups/

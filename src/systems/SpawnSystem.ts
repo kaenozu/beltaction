@@ -9,14 +9,17 @@ import { CANVAS_HEIGHT, PLAYER_FRAME_HEIGHT } from '../engine/Constants';
 import { Entity } from '../engine/Entity';
 import { ChainEnemy } from '../entities/ChainEnemy';
 import { Enemy } from '../entities/Enemy';
+import { MountingAttacker } from '../entities/MountingAttacker';
+import { Strongman } from '../entities/Strongman';
 import { Player } from '../entities/Player';
 import { HitEffect } from '../effects/HitEffect';
 import { DebugFlags } from './DebugFlags';
 import { playHitHeavy, playKick } from './SoundManager';
+
 import { rectsOverlap } from './HitboxConfig';
 
-type EnemyActor = Enemy | ChainEnemy;
-type EnemySpawnKind = 'auto' | 'grunt' | 'chain';
+type EnemyActor = Enemy | ChainEnemy | MountingAttacker | Strongman;
+type EnemySpawnKind = 'auto' | 'grunt' | 'chain' | 'mount' | 'strongman';
 
 export class SpawnSystem extends Entity {
   private enemies: EnemyActor[] = [];
@@ -24,10 +27,19 @@ export class SpawnSystem extends Entity {
   private _hurtImage: HTMLImageElement | null = null;
   private _heavyAttackImage: HTMLImageElement | null = null;
   private _bodyBlowImage: HTMLImageElement | null = null;
+  private _downAttackImage: HTMLImageElement | null = null;
   private _chainSpriteImage: HTMLImageElement | null = null;
   private _chainHurtImage: HTMLImageElement | null = null;
   private _chainDeathImage: HTMLImageElement | null = null;
   private _chainProjectileImage: HTMLImageElement | null = null;
+  private _mountSpriteImage: HTMLImageElement | null = null;
+  private _mountHurtImage: HTMLImageElement | null = null;
+  private _mountSweepImage: HTMLImageElement | null = null;
+  private _mountAttackImage: HTMLImageElement | null = null;
+  private _strongmanSpriteImage: HTMLImageElement | null = null;
+  private _strongmanHurtImage: HTMLImageElement | null = null;
+  private _strongmanHeavyAttackImage: HTMLImageElement | null = null;
+  private _strongmanBodyBlowImage: HTMLImageElement | null = null;
   private playerAttackHits: Set<EnemyActor> = new Set();
   private effects: HitEffect[] = [];
   private readonly ENGAGE_OFFSETS = [54, -54, 104, -104, 18, -18, 148, -148];
@@ -35,6 +47,13 @@ export class SpawnSystem extends Entity {
   private readonly DOWNED_PRESSURE_OFFSETS = [64, -104, 134, -154, 38, -72, 178, -198];
   private readonly POST_GAME_PRESSURE_OFFSETS = [44, -44, 82, -82, 120, -120, 158, -158];
   private readonly GROUND_Y = CANVAS_HEIGHT - PLAYER_FRAME_HEIGHT;
+  private _waveMode: boolean = false;
+  get isWaveMode(): boolean { return this._waveMode; }
+  private waveTimer: number = 0;
+  private readonly WAVE_INTERVAL = 5;
+  private readonly WAVE_COUNT = 4;
+  private pendingWaveSpawns = 0;
+  private waveSpawnDelay = 0;
   
   private syncImagesToEnemies(): void {
     for (const enemy of this.enemies) {
@@ -86,6 +105,67 @@ export class SpawnSystem extends Entity {
     this.syncImagesToEnemies();
   }
 
+  get mountSpriteImage(): HTMLImageElement | null { return this._mountSpriteImage; }
+  set mountSpriteImage(img: HTMLImageElement | null) {
+    this._mountSpriteImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof MountingAttacker) enemy.spriteImage = img ?? this._spriteImage;
+    }
+  }
+
+  get mountHurtImage(): HTMLImageElement | null { return this._mountHurtImage; }
+  set mountHurtImage(img: HTMLImageElement | null) {
+    this._mountHurtImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof MountingAttacker) enemy.hurtImage = img ?? this._hurtImage;
+    }
+  }
+
+  get mountSweepImage(): HTMLImageElement | null { return this._mountSweepImage; }
+  set mountSweepImage(img: HTMLImageElement | null) {
+    this._mountSweepImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof MountingAttacker) enemy.heavyAttackImage = img ?? this._heavyAttackImage;
+    }
+  }
+
+  get mountAttackImage(): HTMLImageElement | null { return this._mountAttackImage; }
+  set mountAttackImage(img: HTMLImageElement | null) {
+    this._mountAttackImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof MountingAttacker) enemy.bodyBlowImage = img ?? this._bodyBlowImage;
+    }
+  }
+
+  get strongmanSpriteImage(): HTMLImageElement | null { return this._strongmanSpriteImage; }
+  set strongmanSpriteImage(img: HTMLImageElement | null) {
+    this._strongmanSpriteImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof Strongman) enemy.spriteImage = img ?? this._mountSpriteImage ?? this._spriteImage;
+    }
+  }
+  get strongmanHurtImage(): HTMLImageElement | null { return this._strongmanHurtImage; }
+  set strongmanHurtImage(img: HTMLImageElement | null) {
+    this._strongmanHurtImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof Strongman) enemy.hurtImage = img ?? this._mountHurtImage ?? this._hurtImage;
+    }
+  }
+  get strongmanHeavyAttackImage(): HTMLImageElement | null { return this._strongmanHeavyAttackImage; }
+  set strongmanHeavyAttackImage(img: HTMLImageElement | null) {
+    this._strongmanHeavyAttackImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof Strongman) enemy.heavyAttackImage = img ?? this._strongmanHeavyAttackImage;
+    }
+  }
+  get strongmanBodyBlowImage(): HTMLImageElement | null { return this._strongmanBodyBlowImage; }
+  set strongmanBodyBlowImage(img: HTMLImageElement | null) {
+    this._strongmanBodyBlowImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof Strongman) enemy.bodyBlowImage = img ?? this._strongmanBodyBlowImage;
+    }
+  }
+
   get hurtImage(): HTMLImageElement | null { return this._hurtImage; }
   set hurtImage(img: HTMLImageElement | null) {
     this._hurtImage = img;
@@ -103,6 +183,14 @@ export class SpawnSystem extends Entity {
     this._bodyBlowImage = img;
     this.syncImagesToEnemies();
   }
+
+  get downAttackImage(): HTMLImageElement | null { return this._downAttackImage; }
+  set downAttackImage(img: HTMLImageElement | null) {
+    this._downAttackImage = img;
+    for (const enemy of this.enemies) {
+      if (enemy instanceof Enemy) enemy.downAttackImage = img;
+    }
+  }
   
   constructor(
     private getPlayer: () => Player,
@@ -112,6 +200,24 @@ export class SpawnSystem extends Entity {
   }
   
   override update(dt: number): void {
+    if (this._waveMode) {
+      if (this.pendingWaveSpawns > 0) {
+        this.waveSpawnDelay -= dt;
+        if (this.waveSpawnDelay <= 0) {
+          this.spawnWaveEnemy();
+          this.pendingWaveSpawns--;
+          this.waveSpawnDelay = 0.3;
+        }
+      }
+      const alive = this.enemies.filter(e => e.active);
+      this.waveTimer -= dt;
+      if (this.waveTimer <= 0 && alive.length >= this.WAVE_COUNT) {
+        this.waveTimer = this.WAVE_INTERVAL + Math.random() * 2;
+        const idx = Math.floor(Math.random() * alive.length);
+        alive[idx].active = false;
+        this.spawnWaveEnemy();
+      }
+    }
     this.assignEnemyTargets();
     for (const enemy of this.enemies) {
       if (enemy.active) enemy.update(dt);
@@ -197,18 +303,28 @@ export class SpawnSystem extends Entity {
       });
   }
   
-  spawnEnemy(kind: EnemySpawnKind = 'auto'): void {
+  spawnEnemy(kind: EnemySpawnKind = 'auto', forceX?: number): void {
     const player = this.getPlayer();
-    const spawnX = Math.min(player.x + player.width * 2 + Math.random() * 80, 2000 - 160);
+    const spawnX = forceX ?? Math.min(player.x + player.width * 2 + Math.random() * 80, 2000 - 160);
     const resolvedKind = kind === 'auto'
-      ? (this.enemies.length > 0 && this.enemies.length % 4 === 3 ? 'chain' : 'grunt')
-      : kind;
+      ? (this.enemies.length > 0 && this.enemies.length % 7 === 6 ? 'strongman' : this.enemies.length > 0 && this.enemies.length % 5 === 4 ? 'mount' : this.enemies.length > 0 && this.enemies.length % 4 === 3 ? 'chain' : 'grunt')
+      : kind === 'strongman'
+        ? 'strongman'
+        : kind;
     const enemy: EnemyActor = resolvedKind === 'chain'
       ? new ChainEnemy(spawnX, this.GROUND_Y, this.getPlayer)
-      : new Enemy(spawnX, this.GROUND_Y, this.getPlayer);
+      : resolvedKind === 'mount'
+        ? new MountingAttacker(spawnX, this.GROUND_Y, this.getPlayer)
+        : resolvedKind === 'strongman'
+          ? new Strongman(spawnX, this.GROUND_Y, this.getPlayer)
+        : new Enemy(spawnX, this.GROUND_Y, this.getPlayer);
     enemy.spriteImage = enemy instanceof ChainEnemy
       ? (this.chainSpriteImage ?? this.spriteImage)
-      : this.spriteImage;
+      : enemy instanceof MountingAttacker
+        ? (this.mountSpriteImage ?? this.spriteImage)
+        : enemy instanceof Strongman
+          ? (this.strongmanSpriteImage ?? this.mountSpriteImage ?? this.spriteImage)
+        : this.spriteImage;
     if (enemy instanceof ChainEnemy) {
       enemy.useFallbackDetails = this.chainSpriteImage === null;
       enemy.chainImage = this.chainProjectileImage;
@@ -216,10 +332,15 @@ export class SpawnSystem extends Entity {
       enemy.deathImage = this.chainDeathImage;
       enemy.heavyAttackImage = this.heavyAttackImage;
       enemy.bodyBlowImage = this.bodyBlowImage;
+    } else if (enemy instanceof MountingAttacker) {
+      enemy.hurtImage = this.mountHurtImage ?? this.hurtImage;
+      enemy.heavyAttackImage = this.mountSweepImage ?? this.heavyAttackImage;
+      enemy.bodyBlowImage = this.mountAttackImage ?? this.bodyBlowImage;
     } else {
       enemy.hurtImage = this.hurtImage;
       enemy.heavyAttackImage = this.heavyAttackImage;
       enemy.bodyBlowImage = this.bodyBlowImage;
+      if (enemy instanceof Enemy) enemy.downAttackImage = this.downAttackImage;
     }
     enemy.onHit = (x: number, y: number, overlay: boolean = false) => this.spawnHitEffect(x, y, overlay);
     enemy.onHitStop = this.onHitStop;
@@ -235,6 +356,27 @@ export class SpawnSystem extends Entity {
     this.effects.push(new HitEffect(x, y, overlay));
   }
   
+  enableWaveMode(enabled: boolean): void {
+    this._waveMode = enabled;
+    this.restart();
+    if (enabled) {
+      this.waveTimer = this.WAVE_INTERVAL;
+      this.pendingWaveSpawns = this.WAVE_COUNT;
+      this.waveSpawnDelay = 0.3;
+    }
+  }
+
+  private readonly WAVE_OFFSETS = [210, -210, 310, -310, 140, -140, 400, -400];
+
+  private spawnWaveEnemy(): void {
+    const player = this.getPlayer();
+    const offset = this.WAVE_OFFSETS[this.enemies.length % this.WAVE_OFFSETS.length];
+    const spawnX = Math.max(80, Math.min(player.x + offset, 2000 - 160));
+    const kinds: EnemySpawnKind[] = ['grunt', 'chain', 'mount', 'strongman'];
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    this.spawnEnemy(kind, spawnX);
+  }
+
   restart(): void {
     this.enemies = [];
     this.playerAttackHits.clear();
@@ -263,6 +405,9 @@ export class SpawnSystem extends Entity {
     const sorted = this.getSortedEnemies();
     for (const enemy of sorted) {
       if (enemy.active && enemy.isBodyBlowGrappler) enemy.render(ctx);
+    }
+    for (const enemy of sorted) {
+      if (enemy.active) enemy.renderOverlay(ctx);
     }
     for (const effect of this.effects) {
       if (effect.active && effect.overlay) effect.render(ctx);

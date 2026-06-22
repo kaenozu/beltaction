@@ -42,4 +42,51 @@ describe('PlayerRenderer', () => {
 
     expect(ctx.drawImage).toHaveBeenCalled();
   });
+
+  it('renders wide grabbed composite sprites without squashing them to the player width', () => {
+    const player = new Player(100, 288);
+    // 480 = 2 logical frames at 240 source width
+    const grabbedImage = { naturalWidth: 480, width: 480 } as HTMLImageElement;
+    player.grabbedImage = grabbedImage;
+    player.startGrabbed(60);
+    const ctx = createMockContext();
+
+    new PlayerRenderer(player).render(ctx);
+
+    expect(ctx.drawImage).toHaveBeenCalledWith(
+      grabbedImage,
+      0,
+      0,
+      480,
+      288,
+      -160,
+      player.y,
+      320,
+      192,
+    );
+  });
+
+  it('renders the mount punch victim sprite for mount down-hit reactions', () => {
+    const player = new Player(100, 288);
+    const mountPunchImage = {} as HTMLImageElement;
+    player.downHitImage = {} as HTMLImageElement;
+    player.mountPunchImage = mountPunchImage;
+    player.tripDown(220);
+    player.downHit(220, false, 0, 'mount');
+    const ctx = createMockContext();
+
+    new PlayerRenderer(player).render(ctx);
+
+    expect(ctx.drawImage).toHaveBeenCalledWith(
+      mountPunchImage,
+      0,
+      0,
+      320,
+      192,
+      -56,
+      player.y + player.height - 135,
+      112,
+      135,
+    );
+  });
 });

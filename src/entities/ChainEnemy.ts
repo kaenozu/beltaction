@@ -8,6 +8,7 @@
 import { Entity } from '../engine/Entity';
 import { Player } from './Player';
 import { DebugFlags } from '../systems/DebugFlags';
+import { playRope, stopRope, playBind, stopBind } from '../systems/SoundManager';
 import { CHAIN_HITBOX, HitboxConfig, HitboxRect, rectsOverlap, resolveFacingHitbox } from '../systems/HitboxConfig';
 import { ChainEnemyRenderer } from './ChainEnemyRenderer';
 
@@ -75,6 +76,7 @@ export class ChainEnemy extends Entity {
     this.height = this.frameHeight;
   }
   private chainRenderer = new ChainEnemyRenderer(this);
+  private previousState: ChainEnemyState | null = null;
 
   override update(dt: number): void {
     const player = this.player();
@@ -89,7 +91,15 @@ export class ChainEnemy extends Entity {
     this.updateStateTimer(dt);
 
     if (this.state === 'hurt' || this.state === 'death') {
-      if (this.state === 'death') this.deathAnimTimer += dt;
+      if (this.state === 'death') {
+        if (this.previousState === 'boundPull' || this.previousState === 'chainBind') {
+          if (player.isBound) player.releaseBound();
+          stopRope();
+          stopBind();
+          this.previousState = null;
+        }
+        this.deathAnimTimer += dt;
+      }
       this.applyPhysics(dt);
       this.updateAnimation(dt);
       return;
@@ -185,6 +195,7 @@ export class ChainEnemy extends Entity {
     this.health = Math.max(0, this.health - amount);
     const knockDir = fromX !== undefined ? (fromX > this.x ? 1 : -1) : this.facing;
     if (this.health <= 0) {
+      this.previousState = this.state;
       this.state = 'death';
       this.stateTimer = 0.65;
       this.deathAnimTimer = 0;
@@ -262,6 +273,7 @@ export class ChainEnemy extends Entity {
       if (player.startBound(this.x + this.width / 2, this.CHAIN_PULL_DURATION, this.CHAIN_PULL_SPEED, this.CHAIN_DAMAGE, force)) {
         this.state = 'boundPull';
         this.stateTimer = this.CHAIN_PULL_DURATION;
+        playRope();
         this.onHit?.(player.x + player.width / 2, player.y + player.height * 0.5, true);
         this.onHitStop?.(0.05, 0.08, 1.5);
       }
@@ -292,6 +304,8 @@ export class ChainEnemy extends Entity {
       return;
     }
     if (this.state === 'chainBind') return;
+    stopRope();
+    playBind();
     this.state = 'chainBind';
     this.stateTimer = this.CHAIN_WRAP_DURATION;
     player.boundReadyForFollowup = true;
@@ -303,6 +317,8 @@ export class ChainEnemy extends Entity {
   }
 
   private cancelChainGrapple(): void {
+    stopRope();
+    stopBind();
     this.state = 'idle';
     this.stateTimer = 0;
     this.velocityX = 0;
