@@ -66,7 +66,7 @@ export function parseHitboxConfig(json: string): HitboxConfig | null {
     if (
       typeof data.frameWidth !== 'number' ||
       typeof data.frameHeight !== 'number' ||
-      !data.hitboxes?.body || !data.hitboxes?.attack
+      !data.hitboxes?.body || !data.hitboxes?.hurt || !data.hitboxes?.attack
     ) {
       return null;
     }

@@ -24,23 +24,23 @@ export class PlayerRenderer {
     ctx.font = '12px monospace';
     ctx.fillText(`${this.player.state.toUpperCase()} [${this.player.currentFrame}] r=${this.player.rapidCount}`, this.player.x, this.player.y - 5);
     this.renderDebugHitboxes(ctx);
-    if ((this.player.state === 'bound' || this.player.state === 'grabbed') && this.player.health > 0) this.drawBoundResistanceGauge(ctx);
+    if ((this.player.state === 'bound' || this.player.state === 'grabbed' || this.player.state === 'reverseCrab') && this.player.health > 0) this.drawBoundResistanceGauge(ctx);
   }
 
   private renderSprite(ctx: CanvasRenderingContext2D): void {
     if (this.player.state === 'idle' && (this.player.idleImage || this.player.pinchIdleImage)) {
       const idle = this.player.isLowHealth && this.player.pinchIdleImage ? this.player.pinchIdleImage : this.player.idleImage;
-      if (idle) ctx.drawImage(idle, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
+      if (idle) ctx.drawImage(idle, 0, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
     } else if (this.player.state === 'walk' && this.player.spriteImage) {
       const sx = this.player.currentFrame * this.player.frameWidth;
       ctx.drawImage(this.player.spriteImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
     } else if (this.player.state === 'attack' && this.player.attackImage) {
-      this.renderFrameSprite(ctx, this.player.attackImage, this.player.currentFrame * this.player.frameWidth);
+      ctx.drawImage(this.player.attackImage, this.player.frameWidth, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
     } else if (this.player.state === 'kick' && this.player.kickImage) {
-      const sx = this.player.currentFrame * this.player.kickFrameWidth;
-      ctx.drawImage(this.player.kickImage, sx, 0, this.player.kickFrameWidth, this.player.frameHeight, -this.player.kickFrameWidth / 2, this.player.y, this.player.kickFrameWidth, this.player.height);
+      ctx.drawImage(this.player.kickImage, this.player.kickFrameWidth, 0, this.player.kickFrameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
     } else if (this.player.state === 'jump' && this.player.jumpImage) {
-      ctx.drawImage(this.player.jumpImage, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
+      const sx = this.player.currentFrame * this.player.frameWidth;
+      ctx.drawImage(this.player.jumpImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y, this.player.width, this.player.height);
     } else if (this.player.state === 'death' && this.player.deathImage) {
       if (this.player.hurtDrawScale > 1 && this.player.hurtImage) {
         const sx = this.player.currentFrame * this.player.frameWidth;
@@ -51,8 +51,12 @@ export class PlayerRenderer {
       }
     } else if (this.player.state === 'hurt' && this.player.hurtImage) {
       this.renderHurtSprite(ctx);
-    } else if ((this.player.state === 'grabbed' || this.player.state === 'bound') && (this.player.grabbedImage || this.player.hurtImage)) {
+    } else if (this.player.state === 'grabbed' && (this.player.grabbedImage || this.player.hurtImage)) {
       this.renderGrabbedSprite(ctx);
+    } else if (this.player.state === 'bound' && (this.player.boundImage || this.player.grabbedImage || this.player.hurtImage)) {
+      this.renderBoundSprite(ctx);
+    } else if (this.player.state === 'reverseCrab' && (this.player.reverseCrabImage || this.player.downImage || this.player.hurtImage)) {
+      this.renderReverseCrabSprite(ctx);
     } else if (this.player.state === 'down' && this.player.downImage) {
       this.drawGroundedSprite(ctx, this.player.downImage, this.player.downSource, this.player.downDrawWidth, this.player.downDrawHeight);
     } else if (this.player.state === 'downhit' && this.player.downHitImage) {
@@ -81,12 +85,53 @@ export class PlayerRenderer {
   private renderGrabbedSprite(ctx: CanvasRenderingContext2D): void {
     const hop = (this.player.state === 'bound' || this.player.state === 'grabbed') ? this.player.boundBodyBlowHurtRatio * 4 : 0;
     const y = this.player.y - hop;
+    ctx.save();
     if (this.player.grabbedImage) {
-      ctx.drawImage(this.player.grabbedImage, -this.player.width / 2, y, this.player.width, this.player.height);
+      const sw = this.player.grabbedImage.naturalWidth || this.player.grabbedImage.width || this.player.frameWidth;
+      const dw = sw * this.player.width / this.player.frameWidth;
+      ctx.drawImage(this.player.grabbedImage, 0, 0, sw, this.player.frameHeight, -dw / 2, y, dw, this.player.height);
     } else if (this.player.hurtImage) {
       const sx = HURT_FRAME_BY_REACTION.guardHead * this.player.frameWidth;
       ctx.drawImage(this.player.hurtImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, y, this.player.width, this.player.height);
     }
+    ctx.restore();
+  }
+
+  private renderBoundSprite(ctx: CanvasRenderingContext2D): void {
+    const hop = this.player.boundBodyBlowHurtRatio * 4;
+    const y = this.player.y - hop;
+    ctx.save();
+    if (this.player.boundImage) {
+      const sw = this.player.boundImage.naturalWidth || this.player.boundImage.width || this.player.frameWidth;
+      const dw = sw * this.player.width / this.player.frameWidth;
+      ctx.drawImage(this.player.boundImage, 0, 0, sw, this.player.frameHeight, -dw / 2, y, dw, this.player.height);
+    } else if (this.player.grabbedImage) {
+      const sw = this.player.grabbedImage.naturalWidth || this.player.grabbedImage.width || this.player.frameWidth;
+      const dw = sw * this.player.width / this.player.frameWidth;
+      ctx.drawImage(this.player.grabbedImage, 0, 0, sw, this.player.frameHeight, -dw / 2, y, dw, this.player.height);
+    } else if (this.player.hurtImage) {
+      const sx = HURT_FRAME_BY_REACTION.guardHead * this.player.frameWidth;
+      ctx.drawImage(this.player.hurtImage, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, y, this.player.width, this.player.height);
+    }
+    ctx.restore();
+  }
+
+  private renderReverseCrabSprite(ctx: CanvasRenderingContext2D): void {
+    const lean = this.player.boundEscapeRatio * 6;
+    const image = this.player.reverseCrabImage ?? this.player.downImage ?? this.player.hurtImage;
+    if (!image) return;
+    ctx.save();
+    ctx.translate(0, -lean);
+    ctx.rotate(-0.08);
+    if (this.player.reverseCrabImage) {
+      ctx.drawImage(image, -this.player.width / 2, this.player.y - 2, this.player.width, this.player.height);
+    } else if (this.player.downImage) {
+      this.drawGroundedSprite(ctx, this.player.downImage, this.player.downSource, this.player.downDrawWidth, this.player.downDrawHeight, 0, -4);
+    } else {
+      const sx = 0;
+      ctx.drawImage(image, sx, 0, this.player.frameWidth, this.player.frameHeight, -this.player.width / 2, this.player.y - 2, this.player.width, this.player.height);
+    }
+    ctx.restore();
   }
 
   private drawChainWrap(ctx: CanvasRenderingContext2D): void {
@@ -177,6 +222,14 @@ export class PlayerRenderer {
 
   private renderDownHitSprite(ctx: CanvasRenderingContext2D): void {
     const presentation = DOWN_HIT_PRESENTATION[this.player.currentDownHitReaction];
+    if (this.player.currentDownHitReaction === 'mount' && this.player.mountPunchImage) {
+      this.drawGroundedSprite(ctx, this.player.mountPunchImage, this.player.mountPunchSource, this.player.mountPunchDrawWidth, this.player.mountPunchDrawHeight, presentation.drawOffsetX, presentation.drawOffsetY);
+      return;
+    }
+    if (this.player.currentDownHitReaction === 'launch' && this.player.launchImage) {
+      this.drawGroundedSprite(ctx, this.player.launchImage, this.player.launchSource, this.player.launchDrawWidth * presentation.drawScale, this.player.launchDrawHeight * presentation.drawScale, presentation.drawOffsetX, presentation.drawOffsetY);
+      return;
+    }
     this.drawGroundedSprite(ctx, this.player.downHitImage!, this.player.downHitSource, this.player.downHitDrawWidth * presentation.drawScale, this.player.downHitDrawHeight * presentation.drawScale, presentation.drawOffsetX, presentation.drawOffsetY);
   }
 

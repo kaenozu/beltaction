@@ -35,6 +35,7 @@ export class EnemyRenderer {
     if (this.renderDownAttack(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
     if (this.renderGrab(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
     if (this.renderGrabFollowup(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
+    if (this.renderReverseCrab(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
 
     this.renderDefault(ctx);
     ctx.restore();
@@ -42,23 +43,32 @@ export class EnemyRenderer {
     this.renderDebugHitboxes(ctx);
   }
 
+  private drawSpriteFull(ctx: CanvasRenderingContext2D, image: HTMLImageElement, sx: number): void {
+    const s = this.enemy.renderScale;
+    const dw = this.enemy.width * s;
+    const dh = this.enemy.height * s;
+    ctx.drawImage(image, sx, 0, this.enemy.frameWidth, this.enemy.frameHeight, -dw / 2, this.enemy.y + this.enemy.height - dh, dw, dh);
+  }
+
   private renderDeath(ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'death' || !this.enemy.hurtImage) return false;
-    ctx.drawImage(this.enemy.hurtImage, this.enemy.frameWidth, 0, this.enemy.frameWidth, this.enemy.frameHeight, -this.enemy.width / 2, this.enemy.y, this.enemy.width, this.enemy.height);
+    this.drawSpriteFull(ctx, this.enemy.hurtImage, this.enemy.frameWidth);
     return true;
   }
 
   private renderHurt(ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'hurt' || !this.enemy.hurtImage) return false;
-    const sx = this.enemy.currentFrame * this.enemy.frameWidth;
-    ctx.drawImage(this.enemy.hurtImage, sx, 0, this.enemy.frameWidth, this.enemy.frameHeight, -this.enemy.width / 2, this.enemy.y, this.enemy.width, this.enemy.height);
+    this.drawSpriteFull(ctx, this.enemy.hurtImage, this.enemy.currentFrame * this.enemy.frameWidth);
     return true;
   }
 
   private renderHeavyAttack(ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'heavyAttack' || !this.enemy.heavyAttackImage) return false;
-    const sx = this.enemy.currentFrame * this.enemy.frameWidth;
-    ctx.drawImage(this.enemy.heavyAttackImage, sx, 0, this.enemy.frameWidth, this.enemy.frameHeight, -this.enemy.width / 2, this.enemy.y, this.enemy.width, this.enemy.height);
+    const sourceWidth = this.getImageWidth(this.enemy.heavyAttackImage);
+    const frameCount = Math.max(1, Math.floor(sourceWidth / this.enemy.frameWidth));
+    const sx = (this.enemy.currentFrame % frameCount) * this.enemy.frameWidth;
+    ctx.scale(-1, 1);
+    this.drawSpriteFull(ctx, this.enemy.heavyAttackImage, sx);
     return true;
   }
 
@@ -75,9 +85,11 @@ export class EnemyRenderer {
 
   private renderDownAttack(ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'downAttack') return false;
-    const image = this.enemy.heavyAttackImage ?? this.enemy.bodyBlowImage;
+    const image = this.enemy.downAttackImage ?? this.enemy.heavyAttackImage ?? this.enemy.bodyBlowImage;
     if (!image) return false;
-    const sx = this.enemy.currentFrame * this.enemy.frameWidth;
+    const sourceWidth = this.getImageWidth(image);
+    const frameCount = Math.max(1, Math.floor(sourceWidth / this.enemy.frameWidth));
+    const sx = (this.enemy.currentFrame % frameCount) * this.enemy.frameWidth;
     const drawScale = 0.92;
     const drawW = this.enemy.width * drawScale;
     const drawH = this.enemy.height * drawScale;
@@ -85,21 +97,22 @@ export class EnemyRenderer {
     return true;
   }
 
-  private renderGrab(ctx: CanvasRenderingContext2D): boolean {
+  private getImageWidth(image: HTMLImageElement): number {
+    return image.naturalWidth || image.width || this.enemy.frameWidth;
+  }
+
+  private renderGrab(_ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'grab') return false;
-    ctx.drawImage(this.enemy.spriteImage!, 0, 0, this.enemy.frameWidth, this.enemy.frameHeight, -this.enemy.width / 2, this.enemy.y, this.enemy.width, this.enemy.height);
     return true;
   }
 
-  private renderGrabFollowup(ctx: CanvasRenderingContext2D): boolean {
+  private renderGrabFollowup(_ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'grabFollowup') return false;
-    const image = this.enemy.bodyBlowImage ?? this.enemy.spriteImage;
-    const sx = this.enemy.bodyBlowImage ? this.enemy.currentFrame * this.enemy.frameWidth : (3 + this.enemy.currentFrame) * this.enemy.frameWidth;
-    if (this.enemy.bodyBlowImage) ctx.scale(-1, 1);
-    const drawScale = this.enemy.bodyBlowImage ? 0.9 : 1;
-    const drawW = this.enemy.width * drawScale;
-    const drawH = this.enemy.height * drawScale;
-    ctx.drawImage(image!, sx, 0, this.enemy.frameWidth, this.enemy.frameHeight, -drawW / 2, this.enemy.y + this.enemy.height - drawH, drawW, drawH);
+    return true;
+  }
+
+  private renderReverseCrab(_ctx: CanvasRenderingContext2D): boolean {
+    if (this.enemy.state !== 'reverseCrab') return false;
     return true;
   }
 
@@ -108,7 +121,7 @@ export class EnemyRenderer {
     if (this.enemy.state === 'idle') frameIdx = 0;
     else if (this.enemy.state === 'walk') frameIdx = 1 + this.enemy.currentFrame;
     else if (this.enemy.state === 'attack') frameIdx = 3 + this.enemy.currentFrame;
-    ctx.drawImage(this.enemy.spriteImage!, frameIdx * this.enemy.frameWidth, 0, this.enemy.frameWidth, this.enemy.frameHeight, -this.enemy.width / 2, this.enemy.y, this.enemy.width, this.enemy.height);
+    this.drawSpriteFull(ctx, this.enemy.spriteImage!, frameIdx * this.enemy.frameWidth);
   }
 
   private renderHUD(ctx: CanvasRenderingContext2D): void {
