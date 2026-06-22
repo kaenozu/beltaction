@@ -13,7 +13,7 @@ import { DebugFlags } from '../systems/DebugFlags';
 import { playHeavyImpact, playEnemyNormal } from '../systems/SoundManager';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
-type EnemyState = 'idle' | 'walk' | 'attack' | 'heavyAttack' | 'bodyBlow' | 'downAttack' | 'grab' | 'grabFollowup' | 'reverseCrab' | 'hurt' | 'death';
+type EnemyState = 'idle' | 'walk' | 'attack' | 'heavyAttack' | 'bodyBlow' | 'downAttack' | 'grab' | 'grabFollowup' | 'hurt' | 'death';
 type StandingAttackKind = 'light' | 'bodyBlow' | 'heavy';
 
 export class Enemy extends Entity {
@@ -37,10 +37,6 @@ export class Enemy extends Entity {
   private readonly GRAB_FOLLOWUP_TICK_INTERVAL = 0.42;
   private readonly GRAB_FOLLOWUP_DAMAGE = 5;
   private readonly GRAB_FOLLOWUP_JOIN_RANGE = 92;
-  private readonly REVERSE_CRAB_RANGE = 48;
-  private readonly REVERSE_CRAB_DURATION = 3.2;
-  private readonly REVERSE_CRAB_TICK_INTERVAL = 0.45;
-  private readonly REVERSE_CRAB_DAMAGE = 3;
   private readonly BODY_BLOW_DAMAGE = 9;
   private readonly DOWN_ATTACK_DAMAGE = 7;
   private readonly DOWNED_ATTACK_COOLDOWN = 2.1;
@@ -55,7 +51,6 @@ export class Enemy extends Entity {
   private grabCooldown: number = 1.2;
   private grabTickTimer: number = 0;
   private grabFollowupTickTimer: number = 0;
-  private reverseCrabTickTimer: number = 0;
   private behaviorTimer: number = 0.5;
   private attackHit: boolean = false;
   private tryingGrab: boolean = false;
@@ -84,13 +79,13 @@ export class Enemy extends Entity {
   get isDead(): boolean { return this.state === 'death'; }
   get isHoldingPlayer(): boolean { return this.state === 'grab'; }
   get isBodyBlowGrappler(): boolean { return this.state === 'grabFollowup'; }
-  get isGrapplingPlayer(): boolean { return this.state === 'grab' || this.state === 'grabFollowup' || this.state === 'reverseCrab'; }
+  get isGrapplingPlayer(): boolean { return this.state === 'grab' || this.state === 'grabFollowup'; }
   private targetX: number | null = null;
   public readonly frameWidth = 160;
   public readonly frameHeight = 192;
   /** Makiと同じ高さに見せるためのスケール補正（Gruntの実内容はy=13〜191=179px） */
   public renderScale = 1.072;
-  private readonly HEAVY_ATTACK_HITBOX: HitboxRect = { x: 88, y: 78, w: 54, h: 34 };
+  private readonly HEAVY_ATTACK_HITBOX: HitboxRect = { x: 80, y: 65, w: 75, h: 45 };
   private hitboxConfig: HitboxConfig = GRUNT_HITBOX;
   
   constructor(x: number, y: number, private player: () => Player) {
@@ -118,12 +113,10 @@ export class Enemy extends Entity {
     }
 
     if (this.tryGameOverRetreat(player, dt)) return;
-    if (this.tryReverseCrabBehaviour(player, dt)) return;
     if (this.tryGrabBehaviour(player, dt)) return;
     if (this.tryGrabFollowupBehaviour(player, dt)) return;
     if (this.tryAttackBehaviour(player, dt)) return;
     if (this.tryBoundBodyBlowBehaviour(player, dt)) return;
-    if (this.tryStartReverseCrab(player, dx, Math.abs(dx), { checkCooldown: true, resetCooldown: true, requireDowned: true })) return;
     if (this.tryRetreatFromDowned(player, dt)) return;
 
     const targetX = this.targetX ?? player.x;
@@ -134,8 +127,7 @@ export class Enemy extends Entity {
 
     this.updateFlankTarget(player, dt);
 
-    if (this.tryStartReverseCrab(player, dx, dist, { checkCooldown: true, requireDowned: true })) {
-    } else if (this.tryDownedAttack(player, dist)) {
+    if (this.tryDownedAttack(player, dist)) {
     } else if (this.tryJoinGrabFollowup(player)) {
     } else if (this.tryGrabAttempt(player, dx, dist, canGrab)) {
       this.applyPhysics(dt);
@@ -187,13 +179,6 @@ export class Enemy extends Entity {
         this.attackCooldown = this.GRAB_FOLLOWUP_COOLDOWN;
         this.mirrorGrabFollowupBodyBlow = false;
         break;
-      case 'reverseCrab':
-        player.releaseReverseCrab();
-        this.state = 'idle';
-        this.velocityX = 0;
-        this.attackCooldown = this.ATTACK_COOLDOWN;
-        this.grabCooldown = this.GRAB_COOLDOWN;
-        break;
       case 'death':
         this.active = false;
         break;
@@ -215,6 +200,14 @@ export class Enemy extends Entity {
 
   private tryGrabBehaviour(player: Player, dt: number): boolean {
     if (this.state !== 'grab') return false;
+    if (player.state !== 'grabbed') {
+      this.state = 'idle';
+      this.velocityX = 0;
+      this.tryingGrab = false;
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return true;
+    }
     player.updateGrabbedPosition(this.x);
     this.velocityX = 0;
     this.grabTickTimer -= dt;
@@ -225,55 +218,6 @@ export class Enemy extends Entity {
         this.onHit?.(player.x + player.width * 0.55, player.y + player.height * 0.23, true);
         this.onHitStop?.(0.035, 0.04, 1);
       }
-    }
-    this.applyPhysics(dt);
-    this.updateAnimation(dt);
-    return true;
-  }
-
-  private tryStartReverseCrab(
-    player: Player, dx: number, dist: number,
-    options?: { checkCooldown?: boolean; resetCooldown?: boolean; requireDowned?: boolean }
-  ): boolean {
-    const { checkCooldown = false, resetCooldown = false, requireDowned = false } = options ?? {};
-    if (checkCooldown && (this.attackCooldown > 0 || this.grabCooldown > 0)) return false;
-    if (dist >= this.REVERSE_CRAB_RANGE) return false;
-    if (requireDowned && !player.isDowned) return false;
-    if (!player.startReverseCrab(this.x)) return false;
-    this.state = 'reverseCrab';
-    this.stateTimer = this.REVERSE_CRAB_DURATION;
-    this.reverseCrabTickTimer = 0;
-    this.velocityX = 0;
-    this.attackHit = false;
-    this.tryingGrab = false;
-    this.currentAttackReaction = 'bodyBlow';
-    this.currentAttackDamage = this.REVERSE_CRAB_DAMAGE;
-    if (resetCooldown) this.attackCooldown = this.ATTACK_COOLDOWN;
-    this.facing = dx > 0 ? 1 : -1;
-    return true;
-  }
-
-  private tryReverseCrabBehaviour(player: Player, dt: number): boolean {
-    if (this.state !== 'reverseCrab') return false;
-    if (!player.isReverseCrabbed) {
-      this.state = 'idle';
-      this.velocityX = 0;
-      this.applyPhysics(dt);
-      this.updateAnimation(dt);
-      return true;
-    }
-    this.x = player.x - this.facing * 28;
-    this.velocityX = 0;
-    this.reverseCrabTickTimer -= dt;
-    if (this.reverseCrabTickTimer <= 0) {
-      this.reverseCrabTickTimer = this.REVERSE_CRAB_TICK_INTERVAL;
-      playHeavyImpact();
-      if (player.health > 0 && !DebugFlags.noPlayerHpDamage) {
-        player.health = Math.max(0, player.health - this.REVERSE_CRAB_DAMAGE);
-        if (player.health <= 0) player.die(player.x);
-      }
-      this.onHit?.(player.x + player.width / 2, player.y + player.height / 2, true);
-      this.onHitStop?.(0.055, 0.06, 1.5);
     }
     this.applyPhysics(dt);
     this.updateAnimation(dt);
@@ -384,18 +328,6 @@ export class Enemy extends Entity {
     if (!player.isDowned || player.canReceiveGroundHit || (DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) return false;
     this.flankTargetX = null;
     this.tryingGrab = false;
-    const footDx = Math.abs((player.x + player.width / 2) - (this.x + this.width / 2));
-    if (footDx <= this.REVERSE_CRAB_RANGE && this.attackCooldown <= 0 && this.grabCooldown <= 0) {
-      this.state = 'reverseCrab';
-      this.stateTimer = this.REVERSE_CRAB_DURATION;
-      this.reverseCrabTickTimer = 0;
-      this.velocityX = 0;
-      this.attackHit = false;
-      this.currentAttackReaction = 'bodyBlow';
-      this.currentAttackDamage = this.REVERSE_CRAB_DAMAGE;
-      player.startReverseCrab(this.x);
-      return true;
-    }
     this.state = dist < this.RETREAT_RANGE ? 'walk' : 'idle';
     this.velocityX = dist < this.RETREAT_RANGE ? -this.facing * this.RETREAT_SPEED : 0;
     this.applyPhysics(dt);
@@ -417,7 +349,6 @@ export class Enemy extends Entity {
 
   private tryDownedAttack(player: Player, dist: number): boolean {
     if (dist >= this.DOWN_ATTACK_RANGE || this.attackCooldown > 0) return false;
-    if (player.isDowned && dist < this.REVERSE_CRAB_RANGE) return false;
     if (!player.canReceiveGroundHit && !(DebugFlags.allowPostGameOverAttacks && player.canReceivePostGameHit)) return false;
     this.state = 'downAttack';
     this.stateTimer = 0.5;
@@ -492,29 +423,11 @@ export class Enemy extends Entity {
       }
       return true;
     }
-    if (player.isDowned && !player.canReceiveGroundHit && !player.isReverseCrabbed && dist < this.REVERSE_CRAB_RANGE && this.attackCooldown <= 0) {
-      player.startReverseCrab(this.x);
-      this.state = 'reverseCrab';
-      this.stateTimer = this.REVERSE_CRAB_DURATION;
-      this.reverseCrabTickTimer = 0;
-      this.attackCooldown = this.ATTACK_COOLDOWN;
-      this.grabCooldown = this.GRAB_COOLDOWN;
-      this.velocityX = 0;
-      this.attackHit = false;
-      this.tryingGrab = false;
-      this.currentAttackReaction = 'bodyBlow';
-      this.currentAttackDamage = this.REVERSE_CRAB_DAMAGE;
-      return true;
-    }
     return false;
   }
 
   private tryStandingAttack(_player: Player, dx: number, dist: number, canGrab: boolean): boolean {
     if (dist >= this.ATTACK_RANGE || this.attackCooldown > 0) return false;
-
-    if (_player.isDowned && dist < this.REVERSE_CRAB_RANGE) {
-      return this.tryStartReverseCrab(_player, dx, dist, { resetCooldown: true });
-    }
 
     const grabChance = _player.canReceivePostGameHit ? this.POST_GAME_GRAB_ATTEMPT_CHANCE : this.GRAB_ATTEMPT_CHANCE;
     if (canGrab && dist < this.GRAB_APPROACH_RANGE && Math.random() < grabChance) {
@@ -624,7 +537,7 @@ export class Enemy extends Entity {
     if (this.state === 'hurt' || this.state === 'death') {
       this.currentFrame = 0;
       this.animTimer = 0;
-    } else if (this.state === 'walk' || this.state === 'attack' || this.state === 'heavyAttack' || this.state === 'bodyBlow' || this.state === 'downAttack' || this.state === 'grab' || this.state === 'grabFollowup' || this.state === 'reverseCrab') {
+    } else if (this.state === 'walk' || this.state === 'attack' || this.state === 'heavyAttack' || this.state === 'bodyBlow' || this.state === 'downAttack' || this.state === 'grab' || this.state === 'grabFollowup') {
       this.animTimer += dt;
       if (this.animTimer >= this.ANIM_SPEED) {
         this.animTimer = 0;
@@ -662,7 +575,6 @@ export class Enemy extends Entity {
     if (this.state === 'downAttack') return resolveFacingHitbox(this, { x: 72, y: 112, w: 78, h: 50 }, this.facing);
     if (this.state === 'grab') return resolveFacingHitbox(this, { x: 82, y: 42, w: 58, h: 92 }, this.facing);
     if (this.state === 'grabFollowup') return resolveFacingHitbox(this, { x: 82, y: 60, w: 58, h: 64 }, this.facing);
-    if (this.state === 'reverseCrab') return resolveFacingHitbox(this, { x: 66, y: 88, w: 82, h: 46 }, this.facing);
     return null;
   }
 

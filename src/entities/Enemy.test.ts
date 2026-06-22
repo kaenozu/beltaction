@@ -75,20 +75,6 @@ describe('Enemy', () => {
       expect(enemy.state).toBe('downAttack');
     });
 
-    it('can hold a reverse crab on a downed player', () => {
-      player.tripDown(100);
-      player.update(0.5);
-      player.startReverseCrab(144);
-      enemy.state = 'reverseCrab';
-      enemy.x = 144;
-
-      enemy.update(0.016);
-
-      expect(enemy.state).toBe('reverseCrab');
-      expect(player.state).toBe('reverseCrab');
-      expect(player.isReverseCrabbed).toBe(true);
-    });
-
     it('approaches chain-wrapped player to join the grapple', () => {
       player.x = 300;
       enemy.x = 180;

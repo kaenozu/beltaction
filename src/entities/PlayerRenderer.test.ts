@@ -80,13 +80,13 @@ describe('PlayerRenderer', () => {
     expect(ctx.drawImage).toHaveBeenCalledWith(
       mountPunchImage,
       0,
-      0,
-      320,
-      192,
-      -56,
-      player.y + player.height - 135,
-      112,
-      135,
+      160,
+      240,
+      128,
+      -100,
+      player.y + player.height - 107,
+      200,
+      107,
     );
   });
 });

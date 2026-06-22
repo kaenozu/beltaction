@@ -101,7 +101,7 @@ export const maki20260622SpriteProfile: MakiSpriteProfile = {
     bound: newHagaiVictimUrl,
     death: newHurtUrl,
     down: newDownUrl,
-    downHit: newPinnedVictimUrl,
+    downHit: newDownUrl,
     launch: newLaunchUrl,
     mountPunch: newPinnedVictimUrl,
     reverseCrab: newPinnedVictimUrl,

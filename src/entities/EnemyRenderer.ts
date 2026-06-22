@@ -35,7 +35,6 @@ export class EnemyRenderer {
     if (this.renderDownAttack(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
     if (this.renderGrab(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
     if (this.renderGrabFollowup(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
-    if (this.renderReverseCrab(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
 
     this.renderDefault(ctx);
     ctx.restore();
@@ -108,11 +107,6 @@ export class EnemyRenderer {
 
   private renderGrabFollowup(_ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'grabFollowup') return false;
-    return true;
-  }
-
-  private renderReverseCrab(_ctx: CanvasRenderingContext2D): boolean {
-    if (this.enemy.state !== 'reverseCrab') return false;
     return true;
   }
 
