@@ -32,10 +32,10 @@ export const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
 };
 
 export const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
-  light: 1.04,
-  guardHead: 1.04,
-  bodyBlow: 1.0,
-  kneeBuckle: 1.12,
+  light: 1.0,
+  guardHead: 1.0,
+  bodyBlow: 0.9,
+  kneeBuckle: 1.0,
 };
 
 export const HURT_HITSTOP_BY_REACTION: Record<HitReactionType, number> = {
@@ -54,8 +54,8 @@ export type GroundHitPresentation = {
 };
 
 export const DOWN_HIT_PRESENTATION: Record<DownHitReactionType, GroundHitPresentation> = {
-  body: { stun: 0.38, knockback: 54, drawOffsetX: 0, drawOffsetY: 0, drawScale: 1 },
-  back: { stun: 0.44, knockback: 72, drawOffsetX: -6, drawOffsetY: -3, drawScale: 1.03 },
-  launch: { stun: 0.5, knockback: 92, drawOffsetX: 8, drawOffsetY: -8, drawScale: 1.06 },
-  mount: { stun: 0.55, knockback: 18, drawOffsetX: 0, drawOffsetY: 0, drawScale: 1 },
+  body: { stun: 0.38, knockback: 54, drawOffsetX: 0, drawOffsetY: 0, drawScale: 1.0 },
+  back: { stun: 0.44, knockback: 72, drawOffsetX: -6, drawOffsetY: -3, drawScale: 1.0 },
+  launch: { stun: 0.5, knockback: 92, drawOffsetX: 8, drawOffsetY: -8, drawScale: 1.0 },
+  mount: { stun: 0.55, knockback: 18, drawOffsetX: 0, drawOffsetY: 0, drawScale: 1.0 },
 };

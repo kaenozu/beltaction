@@ -13,8 +13,8 @@ import { DebugFlags } from '../systems/DebugFlags';
 import { playHeavyImpact, playEnemyNormal } from '../systems/SoundManager';
 import { HitboxConfig, HitboxRect, GRUNT_HITBOX, resolveFacingHitbox, rectsOverlap } from '../systems/HitboxConfig';
 
-type EnemyState = 'idle' | 'walk' | 'attack' | 'heavyAttack' | 'bodyBlow' | 'downAttack' | 'grab' | 'grabFollowup' | 'reverseCrab' | 'hurt' | 'death';
-type StandingAttackKind = 'light' | 'bodyBlow' | 'heavy';
+type EnemyState = 'idle' | 'walk' | 'attack' | 'bodyBlow' | 'downAttack' | 'grab' | 'grabFollowup' | 'reverseCrab' | 'hurt' | 'death';
+type StandingAttackKind = 'light' | 'bodyBlow';
 
 export class Enemy extends Entity {
   public health: number = 30;
@@ -90,7 +90,6 @@ export class Enemy extends Entity {
   public readonly frameHeight = 192;
   /** Makiと同じ高さに見せるためのスケール補正（Gruntの実内容はy=13〜191=179px） */
   public renderScale = 1.072;
-  private readonly HEAVY_ATTACK_HITBOX: HitboxRect = { x: 88, y: 78, w: 54, h: 34 };
   private hitboxConfig: HitboxConfig = GRUNT_HITBOX;
   
   constructor(x: number, y: number, private player: () => Player) {
@@ -166,7 +165,6 @@ export class Enemy extends Entity {
     switch (this.state) {
       case 'hurt':
       case 'attack':
-      case 'heavyAttack':
       case 'bodyBlow':
       case 'downAttack':
         this.state = 'idle';
@@ -215,6 +213,16 @@ export class Enemy extends Entity {
 
   private tryGrabBehaviour(player: Player, dt: number): boolean {
     if (this.state !== 'grab') return false;
+    if (player.state !== 'grabbed' && player.state !== 'death') {
+      this.state = 'idle';
+      this.velocityX = 0;
+      this.attackCooldown = this.ATTACK_COOLDOWN;
+      this.grabCooldown = this.GRAB_COOLDOWN;
+      this.tryingGrab = false;
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return true;
+    }
     player.updateGrabbedPosition(this.x);
     this.velocityX = 0;
     this.grabTickTimer -= dt;
@@ -282,6 +290,16 @@ export class Enemy extends Entity {
 
   private tryGrabFollowupBehaviour(player: Player, dt: number): boolean {
     if (this.state !== 'grabFollowup') return false;
+    if (player.state !== 'bound' && player.state !== 'grabbed' && player.state !== 'death') {
+      this.state = 'idle';
+      this.velocityX = 0;
+      this.attackCooldown = this.ATTACK_COOLDOWN;
+      this.grabCooldown = this.GRAB_COOLDOWN;
+      this.mirrorGrabFollowupBodyBlow = false;
+      this.applyPhysics(dt);
+      this.updateAnimation(dt);
+      return true;
+    }
     if (!player.isDoubleGrabbed) {
       player.finishGrabFollowup();
       this.state = 'idle';
@@ -339,7 +357,7 @@ export class Enemy extends Entity {
   }
 
   private tryAttackBehaviour(player: Player, dt: number): boolean {
-    if (this.state !== 'attack' && this.state !== 'heavyAttack' && this.state !== 'bodyBlow' && this.state !== 'downAttack') return false;
+    if (this.state !== 'attack' && this.state !== 'bodyBlow' && this.state !== 'downAttack') return false;
     if (this.currentFrame === 1 && !this.attackHit) {
       this.attackHit = true;
       this.resolveHit(player);
@@ -372,10 +390,9 @@ export class Enemy extends Entity {
     const cy = (atk.y + atk.y + atk.h + hurt.y + hurt.y + hurt.h) / 4;
     this.onHit?.(cx, cy);
 
-    const bodyBlow = this.state === 'bodyBlow';
-    const heavy = this.state === 'heavyAttack' || this.state === 'downAttack';
-    if (bodyBlow || heavy) playHeavyImpact(); else playEnemyNormal();
-    this.onHitStop?.(bodyBlow || heavy ? 0.095 : 0.045, bodyBlow || heavy ? 0.16 : 0.06, bodyBlow || heavy ? 4 : 1.5);
+    const bodyBlow = this.state === 'bodyBlow' || this.state === 'downAttack';
+    if (bodyBlow) playHeavyImpact(); else playEnemyNormal();
+    this.onHitStop?.(bodyBlow ? 0.095 : 0.045, bodyBlow ? 0.16 : 0.06, bodyBlow ? 4 : 1.5);
   }
 
   private tryRetreatFromDowned(player: Player, dt: number): boolean {
@@ -530,8 +547,8 @@ export class Enemy extends Entity {
   }
 
   private startStandingAttack(attackKind: StandingAttackKind): void {
-    this.state = attackKind === 'heavy' ? 'heavyAttack' : attackKind === 'bodyBlow' ? 'bodyBlow' : 'attack';
-    this.stateTimer = attackKind === 'heavy' ? 0.58 : attackKind === 'bodyBlow' ? 0.54 : 0.4;
+    this.state = attackKind === 'bodyBlow' ? 'bodyBlow' : 'attack';
+    this.stateTimer = attackKind === 'bodyBlow' ? 0.54 : 0.4;
     this.animTimer = 0;
     this.currentFrame = 0;
     this.attackCooldown = this.ATTACK_COOLDOWN;
@@ -539,8 +556,8 @@ export class Enemy extends Entity {
     this.attackHit = false;
     this.tryingGrab = false;
     this.currentAttackReaction = this.getStandingAttackReaction(attackKind);
-    this.currentDownHitReaction = attackKind === 'heavy' ? 'launch' : this.nextDownHitReaction();
-    this.currentAttackDamage = attackKind === 'heavy' ? 12 : attackKind === 'bodyBlow' ? this.BODY_BLOW_DAMAGE : this.damage;
+    this.currentDownHitReaction = this.nextDownHitReaction();
+    this.currentAttackDamage = attackKind === 'bodyBlow' ? this.BODY_BLOW_DAMAGE : this.damage;
   }
 
   private getCenterDxToPlayer(player: Player): number {
@@ -599,14 +616,13 @@ export class Enemy extends Entity {
   }
 
   private nextStandingAttackKind(): StandingAttackKind {
-    const pattern: StandingAttackKind[] = ['light', 'heavy', 'light', 'light'];
+    const pattern: StandingAttackKind[] = ['light', 'bodyBlow', 'light', 'light'];
     const attack = pattern[this.attackPatternIndex % pattern.length];
     this.attackPatternIndex++;
     return attack;
   }
 
   private getStandingAttackReaction(attackKind: StandingAttackKind): HitReactionType {
-    if (attackKind === 'heavy') return 'bodyBlow';
     if (attackKind === 'bodyBlow') return 'bodyBlow';
     return 'light';
   }
@@ -624,7 +640,7 @@ export class Enemy extends Entity {
     if (this.state === 'hurt' || this.state === 'death') {
       this.currentFrame = 0;
       this.animTimer = 0;
-    } else if (this.state === 'walk' || this.state === 'attack' || this.state === 'heavyAttack' || this.state === 'bodyBlow' || this.state === 'downAttack' || this.state === 'grab' || this.state === 'grabFollowup' || this.state === 'reverseCrab') {
+    } else if (this.state === 'walk' || this.state === 'attack' || this.state === 'bodyBlow' || this.state === 'downAttack' || this.state === 'grab' || this.state === 'grabFollowup' || this.state === 'reverseCrab') {
       this.animTimer += dt;
       if (this.animTimer >= this.ANIM_SPEED) {
         this.animTimer = 0;
@@ -657,7 +673,6 @@ export class Enemy extends Entity {
   getAttackHitbox(): HitboxRect | null {
     if (this.currentFrame !== 1) return null;
     if (this.state === 'attack') return resolveFacingHitbox(this, this.hitboxConfig.hitboxes.attack, this.facing);
-    if (this.state === 'heavyAttack') return resolveFacingHitbox(this, this.HEAVY_ATTACK_HITBOX, this.facing);
     if (this.state === 'bodyBlow') return resolveFacingHitbox(this, { x: 78, y: 82, w: 68, h: 42 }, this.facing);
     if (this.state === 'downAttack') return resolveFacingHitbox(this, { x: 72, y: 112, w: 78, h: 50 }, this.facing);
     if (this.state === 'grab') return resolveFacingHitbox(this, { x: 82, y: 42, w: 58, h: 92 }, this.facing);

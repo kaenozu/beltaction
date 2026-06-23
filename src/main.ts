@@ -89,7 +89,6 @@ loadImages({
   player.getupImage = imgs.getup;
   spawner.spriteImage = imgs.grunt;
   spawner.hurtImage = imgs.gruntHurt;
-  spawner.heavyAttackImage = imgs.gruntHeavy;
   spawner.bodyBlowImage = imgs.gruntBodyBlow;
   spawner.downAttackImage = imgs.gruntDownAttack;
   spawner.mountSpriteImage = imgs.mountSprite;

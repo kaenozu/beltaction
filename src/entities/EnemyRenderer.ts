@@ -30,7 +30,6 @@ export class EnemyRenderer {
 
     if (this.renderDeath(ctx)) { ctx.restore(); return; }
     if (this.renderHurt(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
-    if (this.renderHeavyAttack(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
     if (this.renderBodyBlow(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
     if (this.renderDownAttack(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
     if (this.renderGrab(ctx)) { ctx.restore(); this.renderHUD(ctx); this.renderDebugHitboxes(ctx); return; }
@@ -63,13 +62,7 @@ export class EnemyRenderer {
   }
 
   private renderHeavyAttack(ctx: CanvasRenderingContext2D): boolean {
-    if (this.enemy.state !== 'heavyAttack' || !this.enemy.heavyAttackImage) return false;
-    const sourceWidth = this.getImageWidth(this.enemy.heavyAttackImage);
-    const frameCount = Math.max(1, Math.floor(sourceWidth / this.enemy.frameWidth));
-    const sx = (this.enemy.currentFrame % frameCount) * this.enemy.frameWidth;
-    ctx.scale(-1, 1);
-    this.drawSpriteFull(ctx, this.enemy.heavyAttackImage, sx);
-    return true;
+    return false; // 重撃は削除済み
   }
 
   private renderBodyBlow(ctx: CanvasRenderingContext2D): boolean {
@@ -85,7 +78,7 @@ export class EnemyRenderer {
 
   private renderDownAttack(ctx: CanvasRenderingContext2D): boolean {
     if (this.enemy.state !== 'downAttack') return false;
-    const image = this.enemy.downAttackImage ?? this.enemy.heavyAttackImage ?? this.enemy.bodyBlowImage;
+    const image = this.enemy.downAttackImage ?? this.enemy.bodyBlowImage;
     if (!image) return false;
     const sourceWidth = this.getImageWidth(image);
     const frameCount = Math.max(1, Math.floor(sourceWidth / this.enemy.frameWidth));

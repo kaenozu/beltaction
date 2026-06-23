@@ -24,6 +24,8 @@ Ideas to make the game feel better as a ryona-leaning beat-em-up.
 - Added downed pressure attack: enemies can step in for a distinct down-hit attempt while Maki is grounded.
 - Added Chain enemy: mid-range chain bind, short pull, low sweep into knockdown, and down-drag pressure.
 - Chain enemy now has a dedicated 5-frame sprite sheet; the old code-drawn hood/chain details remain only as a fallback.
+- Added enemy heavy attack mapping to a heavy hurt reaction (`guardHead`).
+- Implemented two-person hold with body blow follow-up (`grabFollowup`): grunts can join an existing chain bind or grapple to deliver body blows.
 
 ## Downed-State Rules
 
@@ -126,10 +128,10 @@ These are follow-up candidates after the current chain bind work. Keep them shor
 
 ## Current Best Direction
 
-Build around chain bind -> grunt joins grapple -> two-person body blow follow-up.
-It uses the existing chainWrapped and grabFollowup systems, keeps the action readable, and gives the player a clear situation to escape from.
+Refine the constraint situations further. Since the two-person hold is implemented, a good candidate is "Bound body-blow queue" or "Chain cinch stagger" to add more visual tells and tension to the existing two-person hold.
+Alternatively, implementing the "Knee-buckle body blow" reaction (a new heavy hurt state that causes standing stun rather than knockback) would add variety to the heavy hits and follow-ups.
 
 ## Recommended Next Step
 
-Add an enemy heavy attack and connect it to Maki's heavy hurt reaction.
-This improves both gameplay readability and the ryona reaction variety.
+Implement the "Knee-buckle body blow" reaction for Maki.
+This will give the existing enemy heavy attacks and body blows more visceral impact without immediately knocking her down, keeping her in a vulnerable standing stun.

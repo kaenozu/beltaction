@@ -143,18 +143,18 @@ export class Player extends Entity {
   private hitboxConfig: HitboxConfig = MAKI_HITBOX;
   private readonly KICK_HITBOX: HitboxRect = { x: 130, y: 62, w: 38, h: 34 };
   private readonly DOWNED_HURT_HITBOX: HitboxRect = { x: -24, y: 72, w: 208, h: 120 };
-  public downSource = { x: 0, y: 0, w: 320, h: 288 };
-  public downHitSource = { x: 0, y: 0, w: 320, h: 288 };
-  public mountPunchSource = { x: 0, y: 0, w: 320, h: 288 };
+  public downSource = { x: 0, y: 237, w: 240, h: 51 };
+  public downHitSource = { x: 0, y: 0, w: 228, h: 288 };
+  public mountPunchSource = { x: 0, y: 211, w: 240, h: 77 };
   public launchSource = { x: 0, y: 0, w: 384, h: 288 };
-  public readonly downDrawWidth = 120;
-  public readonly downHitDrawWidth = 112;
-  public readonly mountPunchDrawWidth = 112;
-  public readonly launchDrawWidth = 160;
-  public readonly downDrawHeight = 144;
-  public readonly downHitDrawHeight = 135;
-  public readonly mountPunchDrawHeight = 135;
-  public readonly launchDrawHeight = 120;
+  public readonly downDrawWidth = 240;
+  public readonly downHitDrawWidth = 150;
+  public readonly mountPunchDrawWidth = 240;
+  public readonly launchDrawWidth = 240;
+  public readonly downDrawHeight = 51;
+  public readonly downHitDrawHeight = 189;
+  public readonly mountPunchDrawHeight = 77;
+  public readonly launchDrawHeight = 190;
   get isDefeated(): boolean { return this.health <= 0 && (this.state === 'death' || this.state === 'down' || this.state === 'downhit'); }
   get isGameOver(): boolean { return this.gameOverAnnounced; }
   get isLowHealth(): boolean { return this.health > 0 && this.health <= this.LOW_HEALTH_THRESHOLD; }

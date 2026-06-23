@@ -19,6 +19,7 @@ import newKickUrl from '/assets/maki_20260622_kick.png';
 import newJumpUrl from '/assets/maki_20260622_jump.png';
 import newHurtUrl from '/assets/maki_20260622_hurt.png';
 import newDownUrl from '/assets/maki_20260622_down.png';
+import newDownHitUrl from '/assets/maki_20260622_downhit.png';
 import newGetupUrl from '/assets/maki_20260622_getup.png';
 import newPinnedVictimUrl from '/assets/maki_20260622_pinned_victim.png';
 import newChokeHoldUrl from '/assets/maki_20260622_choke_hold.png';
@@ -101,7 +102,7 @@ export const maki20260622SpriteProfile: MakiSpriteProfile = {
     bound: newHagaiVictimUrl,
     death: newHurtUrl,
     down: newDownUrl,
-    downHit: newPinnedVictimUrl,
+    downHit: newDownHitUrl,
     launch: newLaunchUrl,
     mountPunch: newPinnedVictimUrl,
     reverseCrab: newPinnedVictimUrl,
