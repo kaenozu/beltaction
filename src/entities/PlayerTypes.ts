@@ -32,10 +32,10 @@ export const HURT_KNOCKBACK_BY_REACTION: Record<HitReactionType, number> = {
 };
 
 export const HURT_DRAW_SCALE_BY_REACTION: Record<HitReactionType, number> = {
-  light: 1.04,
-  guardHead: 1.04,
+  light: 1.0,
+  guardHead: 1.0,
   bodyBlow: 1.0,
-  kneeBuckle: 1.12,
+  kneeBuckle: 1.0,
 };
 
 export const HURT_HITSTOP_BY_REACTION: Record<HitReactionType, number> = {
